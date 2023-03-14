@@ -64,19 +64,20 @@ int main() {
     system("del /q /s %temp%\\*");
 
     // Delete driver package
-    std::vector<std::string> driverPackages = getDriverPackages();
-    if (!driverPackages.empty()) {
-        std::cout << "Driver packages found: " << std::endl;
-        for (int i = 0; i < driverPackages.size(); i++) {
-            std::cout << i + 1 << ". " << driverPackages[i] << std::endl;
-        }
-        std::cout << "Enter the number of the driver package to delete or press Enter to skip: ";
-        std::string input;
-        std::getline(std::cin, input);
-        if (!input.empty()) {
-            int index = std::stoi(input) - 1;
-            if (index >= 0 && index < driverPackages.size()) {
-                std::string command = "pnputil /d \"" + driverPackages[index] + "\"";
+    {
+        auto driverPackages = std::make_unique<std::vector<std::string>>(getDriverPackages());
+        if (!driverPackages->empty()) {
+            std::cout << "Driver packages found: " << std::endl;
+            for (int i = 0; i < driverPackages->size(); i++) {
+                std::cout << i + 1 << ". " << (*driverPackages)[i] << std::endl;
+            }
+            std::cout << "Enter the number of the driver package to delete or press Enter to skip: ";
+            std::string input;
+std::getline(std::cin, input);
+if (!input.empty()) {
+int index = std::stoi(input) - 1;
+if (index >= 0 && index < driverPackages->size()) {
+std::string command = "pnputil /d \"" + (*driverPackages)[index] + "\"";
 
 system(command.c_str());
 } else {
@@ -86,28 +87,31 @@ std::cout << "Invalid input. Skipping driver package deletion." << std::endl;
 } else {
 std::cout << "No driver packages found. Skipping driver package deletion." << std::endl;
 }
+}
 // Delete Windows Installer application
-std::vector<std::string> wmicApps = getWMICApps();
-if (!wmicApps.empty()) {
-    std::cout << "WMIC applications found: " << std::endl;
-    for (int i = 0; i < wmicApps.size(); i++) {
-        std::cout << i + 1 << ". " << wmicApps[i] << std::endl;
-    }
-    std::cout << "Enter the number of the WMIC application to uninstall or press Enter to skip: ";
-    std::string input;
-    std::getline(std::cin, input);
-    if (!input.empty()) {
-        int index = std::stoi(input) - 1;
-        if (index >= 0 && index < wmicApps.size()) {
-            std::string appId = wmicApps[index].substr(wmicApps[index].find(" - ") + 3);
-            std::string command = "wmic product where \"IdentifyingNumber='" + appId + "'\" call uninstall";
-            system(command.c_str());
-        } else {
-            std::cout << "Invalid input. Skipping WMIC application uninstallation." << std::endl;
+{
+    auto wmicApps = std::make_unique<std::vector<std::string>>(getWMICApps());
+    if (!wmicApps->empty()) {
+        std::cout << "WMIC applications found: " << std::endl;
+        for (int i = 0; i < wmicApps->size(); i++) {
+            std::cout << i + 1 << ". " << (*wmicApps)[i] << std::endl;
         }
+        std::cout << "Enter the number of the WMIC application to uninstall or press Enter to skip: ";
+        std::string input;
+        std::getline(std::cin, input);
+        if (!input.empty()) {
+            int index = std::stoi(input) - 1;
+            if (index >= 0 && index < wmicApps->size()) {
+                std::string appId = (*wmicApps)[index].substr((*wmicApps)[index].find(" - ") + 3);
+                std::string command = "wmic product where \"IdentifyingNumber='" + appId + "'\" call uninstall";
+                system(command.c_str());
+            } else {
+                std::cout << "Invalid input. Skipping WMIC application uninstallation." << std::endl;
+            }
+        }
+    } else {
+        std::cout << "No WMIC applications found. Skipping WMIC application uninstallation." << std::endl;
     }
-} else {
-    std::cout << "No WMIC applications found. Skipping WMIC application uninstallation." << std::endl;
 }
 
 // Disable Windows Media Player feature
@@ -115,7 +119,6 @@ system("dism /online /disable-feature /featurename:WindowsMediaPlayer");
 system("vssadmin delete shadows /for=C: /oldest");
 system("forfiles /p \"C:\\Windows\\Logs\" /s /m *.log /d -7 /c \"cmd /c del @path\"");
 
-// Wait for user input before exiting
 std::cout << "Cleanup complete. Press Enter to exit." << std::endl;
 std::cin.ignore();
 return 0;

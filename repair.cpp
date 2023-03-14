@@ -6,6 +6,7 @@
 #include <string>
 #include <array>
 #include <vector>
+#include <sstream>
 
 std::string exec(const char* cmd) {
     std::array<char, 128> buffer;
@@ -22,31 +23,29 @@ std::string exec(const char* cmd) {
 
 std::vector<std::string> getDriverPackages() {
     std::vector<std::string> driverPackages;
-    std::string output = exec("pnputil /e");
-    size_t start = output.find("Published name : ") + 18;
-    while (start != std::string::npos) {
-        size_t end = output.find('\n', start);
-        std::string packageName = output.substr(start, end - start);
-        driverPackages.push_back(packageName);
-        start = output.find("Published name : ", end) + 18;
+    std::istringstream input(exec("pnputil /e"));
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.find("Published name : ") != std::string::npos) {
+            std::string packageName = line.substr(18);
+            driverPackages.push_back(packageName);
+        }
     }
     return driverPackages;
 }
 
 std::vector<std::string> getWMICApps() {
     std::vector<std::string> wmicApps;
-    std::string output = exec("wmic product get name,identifyingnumber");
-    size_t start = output.find('\n') + 1;
-    while (start != std::string::npos) {
-        size_t end = output.find('\n', start);
-        std::string line = output.substr(start, end - start);
+    std::istringstream input(exec("wmic product get name,identifyingnumber"));
+    std::string line;
+    std::getline(input, line);
+    while (std::getline(input, line)) {
         size_t delimiter = line.find("  ");
         if (delimiter != std::string::npos) {
             std::string appName = line.substr(0, delimiter);
             std::string appId = line.substr(delimiter);
             wmicApps.push_back(appName + " - " + appId);
         }
-        start = output.find('\n', end) + 1;
     }
     return wmicApps;
 }
@@ -65,53 +64,72 @@ int main() {
 
     // Delete driver package
     {
-        auto driverPackages = std::make_unique<std::vector<std::string>>(getDriverPackages());
-        if (!driverPackages->empty()) {
+        std::vector<std::string> driverPackages;
+        std::istringstream input(exec("pnputil /e"));
+        std::string line;
+        while (std::getline(input, line)) {
+            if (line.find("Published name : ") != std::string::npos) {
+                std::string packageName = line.substr(18);
+                driverPackages.push_back(packageName);
+            }
+        }
+        if (!driverPackages.empty()) {
             std::cout << "Driver packages found: " << std::endl;
-            for (int i = 0; i < driverPackages->size(); i++) {
-                std::cout << i + 1 << ". " << (*driverPackages)[i] << std::endl;
+            for (int i = 0; i < driverPackages.size(); i++) {
+                std::cout << i + 1 << ". " << driverPackages[i] << std::endl;
             }
             std::cout << "Enter the number of the driver package to delete or press Enter to skip: ";
             std::string input;
-std::getline(std::cin, input);
-if (!input.empty()) {
-int index = std::stoi(input) - 1;
-if (index >= 0 && index < driverPackages->size()) {
-std::string command = "pnputil /d \"" + (*driverPackages)[index] + "\"";
-
+            std::getline(std::cin, input);
+            if (!input.empty()) {
+                int index = std::stoi(input) - 1;
+                if (index >= 0 && index < driverPackages.size()) {
+                    std::string command = "pnputil /d \"" + driverPackages[index] + "\"";
+// Execute the command to delete the selected driver package
+std::cout << "Deleting driver package: " << driverPackages[index] << std::endl;
 system(command.c_str());
-} else {
-std::cout << "Invalid input. Skipping driver package deletion." << std::endl;
 }
 }
 } else {
 std::cout << "No driver packages found. Skipping driver package deletion." << std::endl;
 }
 }
-// Delete Windows Installer application
+
+// Uninstall WMIC app
 {
-    auto wmicApps = std::make_unique<std::vector<std::string>>(getWMICApps());
-    if (!wmicApps->empty()) {
-        std::cout << "WMIC applications found: " << std::endl;
-        for (int i = 0; i < wmicApps->size(); i++) {
-            std::cout << i + 1 << ". " << (*wmicApps)[i] << std::endl;
-        }
-        std::cout << "Enter the number of the WMIC application to uninstall or press Enter to skip: ";
-        std::string input;
-        std::getline(std::cin, input);
-        if (!input.empty()) {
-            int index = std::stoi(input) - 1;
-            if (index >= 0 && index < wmicApps->size()) {
-                std::string appId = (*wmicApps)[index].substr((*wmicApps)[index].find(" - ") + 3);
-                std::string command = "wmic product where \"IdentifyingNumber='" + appId + "'\" call uninstall";
-                system(command.c_str());
-            } else {
-                std::cout << "Invalid input. Skipping WMIC application uninstallation." << std::endl;
-            }
-        }
-    } else {
-        std::cout << "No WMIC applications found. Skipping WMIC application uninstallation." << std::endl;
-    }
+std::vector<std::string> wmicApps;
+std::istringstream input(exec("wmic product get name,identifyingnumber"));
+std::string line;
+std::getline(input, line);
+while (std::getline(input, line)) {
+size_t delimiter = line.find(" ");
+if (delimiter != std::string::npos) {
+std::string appName = line.substr(0, delimiter);
+std::string appId = line.substr(delimiter + 2);
+wmicApps.push_back(appName + " - " + appId);
+}
+}
+if (!wmicApps.empty()) {
+std::cout << "WMIC apps found: " << std::endl;
+for (int i = 0; i < wmicApps.size(); i++) {
+std::cout << i + 1 << ". " << wmicApps[i] << std::endl;
+}
+std::cout << "Enter the number of the WMIC app to uninstall or press Enter to skip: ";
+std::string input;
+std::getline(std::cin, input);
+if (!input.empty()) {
+int index = std::stoi(input) - 1;
+if (index >= 0 && index < wmicApps.size()) {
+std::string appId = wmicApps[index].substr(wmicApps[index].find("-") + 2);
+std::string command = "msiexec /x " + appId;
+// Execute the command to uninstall the selected WMIC app
+std::cout << "Uninstalling WMIC app: " << wmicApps[index] << std::endl;
+system(command.c_str());
+}
+}
+} else {
+std::cout << "No WMIC apps found. Skipping WMIC app uninstallation." << std::endl;
+}
 }
 
 // Disable Windows Media Player feature

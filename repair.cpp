@@ -124,7 +124,7 @@ std::cout << i + 1 << ". " << wmicApps[i] << std::endl;
     index = std::stoi(input) - 1;
     if (index >= 0 && index < wmicApps.size()) {
       std::string appId = wmicApps[index].substr(wmicApps[index].find("-") + 2);
-      std::string command = "msiexec /x " + appId;
+      std::string command = "msiexec /uninstall " + appId;
       // Execute the command to uninstall the selected WMIC app
       std::cout << "Uninstalling WMIC app: " << wmicApps[index] << std::endl;
       system(command.c_str());

@@ -42,21 +42,26 @@ std::vector < std::string > getDriverPackages() {
   return driverPackages;
 }
 
-std::vector < std::string > getWMICApps() {
-  std::vector < std::string > wmicApps;
-  std::istringstream input(exec("wmic product get name,identifyingnumber"));
-  std::string line;
-  std::getline(input, line);
-  while (std::getline(input, line)) {
-    size_t delimiter = line.find("  ");
-    if (delimiter != std::string::npos) {
-      std::string appName = line.substr(0, delimiter);
-      std::string appId = line.substr(delimiter);
-      wmicApps.push_back(appName + " - " + appId);
+std::vector<std::string> getWMICApps() {
+    std::vector<std::string> wmicApps;
+    std::istringstream input(exec("wmic product get IdentifyingNumber,Name"));
+    std::string line;
+    std::getline(input, line); // Skip the header line
+
+    while (std::getline(input, line)) {
+        if (!line.empty()) {
+            size_t delimiter = line.find("  ");
+            if (delimiter != std::string::npos) {
+                std::string appId = line.substr(0, delimiter);
+                std::string appName = line.substr(delimiter + 2);
+                wmicApps.push_back(appId + "," + appName);
+            }
+        }
     }
-  }
-  return wmicApps;
+
+    return wmicApps;
 }
+
 
 int main() {
     // Perform full cleanup and system file check

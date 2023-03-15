@@ -29,18 +29,31 @@ std::string exec(const char * cmd) {
   return result;
 }
 
-std::vector < std::string > getDriverPackages() {
-  std::vector < std::string > driverPackages;
-  std::istringstream input(exec("pnputil /e"));
-  std::string line;
-  while (std::getline(input, line)) {
-    if (line.find("Published name : ") != std::string::npos) {
-      std::string packageName = line.substr(18);
-      driverPackages.push_back(packageName);
-    }
-  }
-  return driverPackages;
+struct DriverPackage {
+    std::string publishedName;
+    std::string driverName;
+};
+std::ostream& operator<<(std::ostream& os, const DriverPackage& driverPackage) {
+    os << "Published name: " << driverPackage.publishedName
+       << ", Driver name: " << driverPackage.driverName;
+    return os;
 }
+std::vector<DriverPackage> getDriverPackages() {
+    std::vector<DriverPackage> driverPackages;
+    std::istringstream input(exec("pnputil /e"));
+    std::string line;
+    DriverPackage currentDriverPackage;
+    while (std::getline(input, line)) {
+        if (line.find("Published name : ") != std::string::npos) {
+            currentDriverPackage.publishedName = line.substr(18);
+        } else if (line.find("Driver name    : ") != std::string::npos) {
+            currentDriverPackage.driverName = line.substr(18);
+            driverPackages.push_back(currentDriverPackage);
+        }
+    }
+    return driverPackages;
+}
+
 
 std::vector<std::string> getWMICApps() {
     std::vector<std::string> wmicApps;
@@ -77,14 +90,12 @@ int main() {
 
     // Delete driver package
     {
-      std::vector < std::string > driverPackages;
-      std::istringstream input(exec("pnputil /e"));
-      std::string line;
-      while (std::getline(input, line)) {
-        if (line.find("Published name : ") != std::string::npos) {
-          std::string packageName = line.substr(18);
-          driverPackages.push_back(packageName);
-        }
+      std::vector<DriverPackage> driverPackages = getDriverPackages(); // Changed to DriverPackage
+        if (!driverPackages.empty()) {
+            std::cout << "Driver packages found: " << std::endl;
+            for (int i = 0; i < driverPackages.size(); i++) {
+                std::cout << i + 1 << ". " << driverPackages[i] << std::endl;
+            }
       }
       if (!driverPackages.empty()) {
         std::cout << "Driver packages found: " << std::endl;
@@ -103,7 +114,8 @@ int main() {
           }
           index = std::stoi(input) - 1;
           if (index >= 0 && index < driverPackages.size()) {
-            std::string command = "pnputil /d \"" + driverPackages[index] + "\"";
+            std::string command = "pnputil /d \"" + driverPackages[index].publishedName + "\"";
+
 
             // Execute the command to delete the selected driver package
             std::cout << "Deleting driver package: " << driverPackages[index] << std::endl;

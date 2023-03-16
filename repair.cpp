@@ -125,6 +125,12 @@ int main() {
     std::cout << "Removing temporary files." << std::endl;
     system("del /s /q %temp%\\*");
     system("del /s /q %systemroot%\\temp\\*");
+    // Cleanup font cache
+    system("net stop fontcache");
+    system("del /f /s /q /a %systemroot%\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*");
+    system("del /f /s /q /a %systemroot%\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache-System\\*");
+    system("net start fontcache");
+
     {
     std::vector<std::string> storeApps = getWindowsStoreApps();
     if (!storeApps.empty()) {
@@ -228,8 +234,20 @@ int main() {
         }
       }
 
-      // Disable Windows Media Player feature
+      // Disable insecure windows features
+      std::cout << "Disabling insecure windows features" << std::endl;
       system("dism /online /disable-feature /featurename:WindowsMediaPlayer");
+      std::cout << "Disabling SMBV1" << std::endl;
+      system("dism /online /disable-feature /featurename:SMB1Protocol");
+      std::cout << "Disabling RDP" << std::endl;
+      system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\" /v fDenyTSConnections /t REG_DWORD /d 1 /f");
+      std::cout << "Disabling Remote Assistance" << std::endl;
+      system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Remote Assistance\" /v fAllowToGetHelp /t REG_DWORD /d 0 /f");
+      std::cout << "Disable Autorun for all drives" << std::endl;
+      system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\" /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f");
+      std::cout << "Disabling LLMNR" << std::endl;
+      system("reg add \"HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient\" /v EnableMulticast /t REG_DWORD /d 0 /f");
+      std::cout << "Deleting oldest shadowcopy" << std::endl;
       system("vssadmin delete shadows /for=C: /oldest");
       system("forfiles /p \"C:\\Windows\\Logs\" /s /m *.log /d -7 /c \"cmd /c del @path\"");
       // Empty the Recycle Bin

@@ -254,7 +254,21 @@ int main() {
       system("reg add \"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\" /v ConsentPromptBehaviorAdmin /t REG_DWORD /d 2 /f");
 
       system("forfiles /p \"C:\\Windows\\Logs\" /s /m *.log /d -7 /c \"cmd /c del @path\"");
-      // Empty the Recycle Bin
+      std::cout << "Enabling Windows Defender Credential Guard" << std::endl;
+      system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\" /v LsaCfgFlags /t REG_DWORD /d 1 /f");
+      std::cout << "Enabling Exploit Protection settings" << std::endl;
+      system("powershell -command \"Set-ProcessMitigation -System -Enable DEP,SEHOP,ASLR\"");
+      std::cout << "Enabling Data Execution Prevention (DEP)" << std::endl;
+      system("bcdedit /set nx AlwaysOn");
+      std::cout << "Enabling Secure Boot" << std::endl;
+      system("bcdedit /set {default} bootmenupolicy Standard");
+      std::cout << "Disabling Microsoft Office macros." << std::endl;
+      system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\16.0\\Excel\\Security\" /v VBAWarnings /t REG_DWORD /d 4 /f");
+      system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\16.0\\PowerPoint\\Security\" /v VBAWarnings /t REG_DWORD /d 4 /f");
+      system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\16.0\\Word\\Security\" /v VBAWarnings /t REG_DWORD /d 4 /f");
+      std::cout << "Enabling Windows Defender Exploit Guard." << std::endl;
+      system("powershell -command \"Set-ProcessMitigation -System -Enable ExploitGuard\"");
+
       // Disable Windows Delivery Optimization
       std::cout << "Disabling Windows Delivery Optimization" << std::endl;
       system("reg add \"HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization\" /v DODownloadMode /t REG_DWORD /d 0 /f");

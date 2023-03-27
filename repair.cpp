@@ -274,14 +274,14 @@ int main() {
       system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\16.0\\Excel\\Security\" /v VBAWarnings /t REG_DWORD /d 4 /f");
       system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\16.0\\PowerPoint\\Security\" /v VBAWarnings /t REG_DWORD /d 4 /f");
       system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\16.0\\Word\\Security\" /v VBAWarnings /t REG_DWORD /d 4 /f");
-      std::cout << "Enabling Windows Defender Exploit Guard." << std::endl;
-      system("powershell -command \"Set-ProcessMitigation -System -Enable ExploitGuard\"");
       std::cout << "Enabling Address Space Layout Randomization." << std::endl;
       system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\" /v MoveImages /t REG_DWORD /d 1 /f");
 
       std::cout << "Enabling DNS-over-HTTPS (DoH) in Windows 11." << std::endl;
       system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 2 /f");
       std::cout << "Checking for and installing Windows updates." << std::endl;
+      system("powershell -command \"Register-PackageSource -Trusted -ProviderName 'PowerShellGet' -Name 'PSGallery' -Location 'https://www.powershellgallery.com/api/v2'\"");
+      system("powershell -command \"Install-Package -Name PSWindowsUpdate -ProviderName PowerShellGet -Force\"");
       system("powershell -command \"Import-Module PowerShellGet; Install-Module PSWindowsUpdate -Force; Get-WindowsUpdate -Install\"");
       std::cout << "Restricting access to the Local System Authority." << std::endl;
       system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\" /v RestrictAnonymous /t REG_DWORD /d 1 /f");

@@ -276,8 +276,6 @@ int main() {
       system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\16.0\\Word\\Security\" /v VBAWarnings /t REG_DWORD /d 4 /f");
       std::cout << "Enabling Windows Defender Exploit Guard." << std::endl;
       system("powershell -command \"Set-ProcessMitigation -System -Enable ExploitGuard\"");
-      std::cout << "Enabling Windows ASR." << std::endl;
-      system("powershell -command \"Set-MpPreference -AttackSurfaceReductionRules_Ids BE9BA2D9-53EA-4CDC-84E5-9B1EEEE46550,3B576869-A4EC-4529-8536-B80A7769E899,D4F940AB-401B-4EFC-AADC-AD5F3C50688A -AttackSurfaceReductionRules_Actions Enabled,Enabled,Enabled\"");
       std::cout << "Enabling Address Space Layout Randomization." << std::endl;
       system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\" /v MoveImages /t REG_DWORD /d 1 /f");
 

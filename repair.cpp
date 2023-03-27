@@ -249,8 +249,16 @@ int main() {
       system("reg add \"HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient\" /v EnableMulticast /t REG_DWORD /d 0 /f");
       std::cout << "Deleting oldest shadowcopy" << std::endl;
       system("vssadmin delete shadows /for=C: /oldest");
+      std::cout << "Enable UAC" << std::endl;
+      system("reg add \"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\" /v EnableLUA /t REG_DWORD /d 1 /f");
+      system("reg add \"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\" /v ConsentPromptBehaviorAdmin /t REG_DWORD /d 2 /f");
+
       system("forfiles /p \"C:\\Windows\\Logs\" /s /m *.log /d -7 /c \"cmd /c del @path\"");
       // Empty the Recycle Bin
+      // Disable Windows Delivery Optimization
+      std::cout << "Disabling Windows Delivery Optimization" << std::endl;
+      system("reg add \"HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization\" /v DODownloadMode /t REG_DWORD /d 0 /f");
+
       std::cout << "Emptying the Recycle Bin." << std::endl;
       system("rd /s /q %systemdrive%\\$Recycle.Bin");
 

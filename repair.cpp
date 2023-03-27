@@ -280,16 +280,19 @@ int main() {
       std::cout << "Enabling DNS-over-HTTPS (DoH) in Windows 11." << std::endl;
       system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 2 /f");
       std::cout << "Checking for and installing Windows updates." << std::endl;
+      system("powershell -command \"Install-Module -Name PowerShellGet -Scope CurrentUser -Force\"");
       system("powershell -command \"Register-PackageSource -Trusted -ProviderName 'PowerShellGet' -Name 'PSGallery' -Location 'https://www.powershellgallery.com/api/v2'\"");
       system("powershell -command \"Install-Package -Name PSWindowsUpdate -ProviderName PowerShellGet -Force\"");
-      system("powershell -command \"Import-Module PowerShellGet; Install-Module PSWindowsUpdate -Force; Get-WindowsUpdate -Install\"");
+      system("powershell -command \"Import-Module PowerShellGet; Import-Module PSWindowsUpdate; Install-Module PSWindowsUpdate -Force; Get-WindowsUpdate -Install\"");
       std::cout << "Restricting access to the Local System Authority." << std::endl;
       system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\" /v RestrictAnonymous /t REG_DWORD /d 1 /f");
 
       // Disable Windows Delivery Optimization
       std::cout << "Disabling Windows Delivery Optimization" << std::endl;
       system("reg add \"HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization\" /v DODownloadMode /t REG_DWORD /d 0 /f");
-
+      std::cout << "Enabling Memory Integrity" << std::endl;
+      system("reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity\" /v Enabled /t REG_DWORD /d 1 /f");
+      std::cout << "Memory Integrity enabled. Please reboot your system for the changes to take effect." << std::endl;
       std::cout << "Emptying the Recycle Bin." << std::endl;
       system("rd /s /q %systemdrive%\\$Recycle.Bin");
 

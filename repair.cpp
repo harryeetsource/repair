@@ -262,7 +262,7 @@ int main() {
 
 
       std::cout << "Enabling Exploit Protection settings" << std::endl;
-      system("powershell -command \"Set-ProcessMitigation -System -Enable DEP,SEHOP,ASLR\"");
+      system("powershell -command \"Set-ProcessMitigation -System -Enable DEP,SEHOP\"");
       std::cout << "Enabling Data Execution Prevention (DEP)" << std::endl;
       system("bcdedit /set nx AlwaysOn");
       std::cout << "Enabling Secure Boot" << std::endl;
@@ -284,7 +284,7 @@ int main() {
       std::cout << "Enabling DNS-over-HTTPS (DoH) in Windows 11." << std::endl;
       system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\" /v EnableAutoDoh /t REG_DWORD /d 2 /f");
       std::cout << "Checking for and installing Windows updates." << std::endl;
-      system("powershell -command \"Install-Module PSWindowsUpdate -Force; Get-WindowsUpdate -Install\"");
+      system("powershell -command \"Import-Module PowerShellGet; Install-Module PSWindowsUpdate -Force; Get-WindowsUpdate -Install\"");
       std::cout << "Restricting access to the Local System Authority." << std::endl;
       system("reg add \"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\" /v RestrictAnonymous /t REG_DWORD /d 1 /f");
 

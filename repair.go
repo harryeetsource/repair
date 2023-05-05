@@ -226,6 +226,7 @@ func performSystemCleanup() {
 }
 
 func main() {
+	os.Setenv("FYNE_RENDER", "software")
 	myApp := app.New()
 	myWindow := myApp.NewWindow("System Cleanup")
 
@@ -301,6 +302,7 @@ func main() {
 	cleanupButton := widget.NewButton("Perform System Cleanup", func() {
 		fmt.Println("Performing system cleanup...")
 		// Add your cleanup commands here
+		performSystemCleanup()
 	})
 
 	cleanupTab := container.NewVBox(

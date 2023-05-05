@@ -14,6 +14,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+var myApp fyne.App
+var myWindow fyne.Window
+
 func execCommand(cmd string, args ...string) (string, error) {
 	var out bytes.Buffer
 	command := exec.Command(cmd, args...)

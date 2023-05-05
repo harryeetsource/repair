@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -17,6 +18,36 @@ import (
 var myApp fyne.App
 var myWindow fyne.Window
 
+type DriverPackage struct {
+	PublishedName  string
+	DriverName     string
+	DriverVersion  string
+	PackageRanking string
+	OEMInformation string
+}
+
+func enumerateDriverPackages() ([]DriverPackage, error) {
+	driverPackages := make([]DriverPackage, 0)
+
+	cmd := exec.Command("pnputil", "-e")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to enumerate driver packages: %v", err)
+	}
+
+	re := regexp.MustCompile(`Published Name: (.+)\r\nDriver package provider: .+\r\nClass GUID: .+\r\nDriver Version: .+\r\nDriver Date: .+\r\n.*\r\nDriver Name: (.+)\r\n`)
+	matches := re.FindAllStringSubmatch(string(output), -1)
+
+	for _, match := range matches {
+		driverPackage := DriverPackage{
+			DriverName:    match[2],
+			PublishedName: match[1],
+		}
+		driverPackages = append(driverPackages, driverPackage)
+	}
+
+	return driverPackages, nil
+}
 func execCommand(cmd string, args ...string) (string, error) {
 	var out bytes.Buffer
 	command := exec.Command(cmd, args...)
@@ -28,36 +59,37 @@ func execCommand(cmd string, args ...string) (string, error) {
 	return out.String(), nil
 }
 
-type DriverPackage struct {
-	PublishedName string
-	DriverName    string
-}
-
 func (d DriverPackage) String() string {
 	return fmt.Sprintf("Published name: %s, Driver name: %s", d.PublishedName, d.DriverName)
 }
 
-func getDriverPackages() ([]DriverPackage, error) {
-	driverPackages := []DriverPackage{}
-	output, err := execCommand("pnputil", "/e")
+func getDriverPackages() ([]DriverPackage, []string, error) {
+	var driverPackages []DriverPackage
+	var driverPackageIds []string
+
+	// Get list of driver packages and IDs
+	command := "pnputil /e"
+	out, err := exec.Command("cmd", "/C", command).Output()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	input := strings.NewReader(output)
-	scanner := bufio.NewScanner(input)
-	var currentDriverPackage DriverPackage
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "Published name :") {
-			currentDriverPackage.PublishedName = strings.TrimSpace(strings.Split(line, ":")[1])
-		} else if strings.Contains(line, "Driver package provider :") {
-			currentDriverPackage.DriverName = strings.TrimSpace(strings.Split(line, ":")[1])
-			driverPackages = append(driverPackages, currentDriverPackage)
+	// Parse output and extract driver package information
+	re := regexp.MustCompile(`Published name\s+= (.+)\r\nDriver package provider\s+= (.+)\r\nClass name\s+= (.+)\r\nDriver date and version\s+= (.+)\r\nDriver package ranking\s+= (.+)\r\nOEM information\s+= (.+)\r\n`)
+	matches := re.FindAllStringSubmatch(string(out), -1)
+	for _, match := range matches {
+		driverPackage := DriverPackage{
+			DriverName:     match[3],
+			PublishedName:  match[1],
+			DriverVersion:  match[4],
+			PackageRanking: match[5],
+			OEMInformation: match[6],
 		}
+		driverPackages = append(driverPackages, driverPackage)
+		driverPackageIds = append(driverPackageIds, match[1])
 	}
 
-	return driverPackages, nil
+	return driverPackages, driverPackageIds, nil
 }
 
 func getWMICApps() ([]string, error) {
@@ -238,7 +270,7 @@ func main() {
 	progressBar.Max = float64(numCommands)
 
 	storeApps, _ := getWindowsStoreApps()
-	driverPackages, _ := getDriverPackages()
+	driverPackages, _, _ := getDriverPackages()
 	wmicApps, _ := getWMICApps()
 
 	// List of Windows Store Apps
@@ -271,15 +303,16 @@ func main() {
 			return widget.NewLabel("Template")
 		},
 		func(index widget.ListItemID, item fyne.CanvasObject) {
-			item.(*widget.Label).SetText(driverPackages[index].PublishedName)
+			item.(*widget.Label).SetText(driverPackages[index].DriverName + " (" + driverPackages[index].PublishedName + ")")
 		},
 	)
+
 	driverPackageList.OnSelected = func(id widget.ListItemID) {
 		driverPackageName := driverPackages[id].PublishedName
 		command := "pnputil /d \"" + driverPackageName + "\""
 		fmt.Println("Deleting driver package: " + driverPackageName)
 		exec.Command("cmd", "/C", command).Run()
-		driverPackages, _ = getDriverPackages()
+		driverPackages, _, _ = getDriverPackages()
 		driverPackageList.Refresh()
 	}
 

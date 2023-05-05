@@ -229,9 +229,13 @@ func performSystemCleanup() {
 }
 
 func main() {
+	fmt.Println("Booting up the Patriot...")
 	os.Setenv("FYNE_RENDER", "software")
 	myApp := app.New()
 	myWindow := myApp.NewWindow("System Cleanup")
+	progressBar := widget.NewProgressBar()
+	numCommands := 18
+	progressBar.Max = float64(numCommands)
 
 	storeApps, _ := getWindowsStoreApps()
 	driverPackages, _ := getDriverPackages()
@@ -259,7 +263,6 @@ func main() {
 	}
 
 	// List of Driver Packages
-
 	driverPackageList := widget.NewList(
 		func() int {
 			return len(driverPackages)
@@ -304,23 +307,35 @@ func main() {
 	// System cleanup button
 	cleanupButton := widget.NewButton("Perform System Cleanup", func() {
 		fmt.Println("Performing system cleanup...")
+		progressBar.SetValue(0)
+		progressBar.Show()
 		// Add your cleanup commands here
 		performSystemCleanup()
+		progressBar.Hide()
 	})
+
+	progressBar.Hide()
 
 	cleanupTab := container.NewVBox(
 		cleanupButton,
 		widget.NewLabel("Click the button to perform system cleanup."),
+		progressBar,
 	)
 
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Windows Store Apps", storeAppList),
+
 		container.NewTabItem("Driver Packages", driverPackageList),
 		container.NewTabItem("WMIC Apps", wmicAppList),
 		container.NewTabItem("System Cleanup", cleanupTab),
 	)
-
 	myWindow.SetContent(tabs)
 	myWindow.Resize(fyne.NewSize(500, 400))
+	myWindow.ShowAndRun()
+	myWindow.SetContent(
+		tabs,
+	)
+
+	myWindow.Resize(fyne.NewSize(800, 600))
 	myWindow.ShowAndRun()
 }

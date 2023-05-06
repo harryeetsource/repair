@@ -264,7 +264,7 @@ func main() {
 	fmt.Println("Booting up the Patriot...")
 	os.Setenv("FYNE_RENDER", "software")
 	myApp := app.New()
-	myWindow := myApp.NewWindow("System Cleanup")
+	myWindow := myApp.NewWindow("The Patriot")
 	progressBar := widget.NewProgressBar()
 	numCommands := 18
 	progressBar.Max = float64(numCommands)

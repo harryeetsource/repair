@@ -18,7 +18,7 @@ pub enum Task {
 }
 
 impl Task {
-    pub fn description(&self) -> &str {
+    pub fn task_description(&self) -> &str {
         match self {
             Task::DiskCleanup => "Perform Disk Cleanup",
             Task::PrefetchCleanup => "Clean Prefetch Files",
@@ -32,7 +32,6 @@ impl Task {
             Task::HardenSystem => "Harden System",
         }
     }
-
     pub fn execute_commands(
         &self,
         log: Arc<Mutex<String>>,
@@ -88,7 +87,10 @@ impl Task {
                 let result = exec_command(program, &args);
                 let mut log = log.lock().unwrap();
                 match result {
-                    Ok(()) => log.push_str(&format!("Command '{}' executed successfully.\n", program)),
+                    Ok(output) => {
+                        log.push_str(&format!("Command '{}' executed successfully.\n", program));
+                        log.push_str(&format!("Output:\n{}\n", output));
+                    }
                     Err(e) => log.push_str(&format!("Command '{}' failed: {}\n", program, e)),
                 }
             }
@@ -98,7 +100,8 @@ impl Task {
     }
 }
 
-fn exec_command(program: &str, args: &[&str]) -> Result<(), String> {
+
+fn exec_command(program: &str, args: &[&str]) -> Result<String, String> {
     let output = SystemCommandProcess::new(program)
         .args(args)
         .stdout(Stdio::piped())
@@ -115,8 +118,11 @@ fn exec_command(program: &str, args: &[&str]) -> Result<(), String> {
             program, code, stderr
         ));
     }
-    Ok(())
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    Ok(stdout)
 }
+
 
 pub struct SystemMaintenanceApp {
     tasks: Vec<Task>,
@@ -152,15 +158,14 @@ impl eframe::App for SystemMaintenanceApp {
 
             for task in &self.tasks {
                 if *self.running_task.lock().unwrap() {
-                    ui.label(format!("Running: {}", task.description()));
-                } else if ui.button(task.description()).clicked() {
+                    ui.label(format!("Running: {}", task.task_description()));
+                } else if ui.button(task.task_description()).clicked() {
                     task.execute_commands(self.log.clone(), self.running_task.clone());
                 }
             }
 
             ui.separator();
 
-            // Show spinner or progress bar if a task is running
             if *self.running_task.lock().unwrap() {
                 ui.label("Task is currently running...");
                 ui.add(egui::ProgressBar::new(0.5).animate(true));
@@ -180,6 +185,7 @@ impl eframe::App for SystemMaintenanceApp {
         });
     }
 }
+
 
 fn main() -> eframe::Result<()> {
     let app = SystemMaintenanceApp::new();

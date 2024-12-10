@@ -18,7 +18,9 @@ pub enum Task {
     FlushDNSCache,
     ClearEventLogs,
     ClearARP,
-    ResetNetworkSettings
+    ResetNetworkSettings,
+    SearchIndexingCleanup,
+    BrowserCacheCleanup,
 }
 
 impl Task {
@@ -38,6 +40,8 @@ impl Task {
             Task::ClearEventLogs => "Clear Event Logs",
             Task::ClearARP => "Clear ARP Cache",
             Task::ResetNetworkSettings => "Reset Network Settings",
+            Task::SearchIndexingCleanup => "Rebuild Search Index",
+            Task::BrowserCacheCleanup => "Clean Browser Cache",
         }
     }
 
@@ -127,6 +131,21 @@ impl Task {
                 ("cmd", vec!["/c", "netsh int ip reset"]),
                 ("cmd", vec!["/c", "netsh winsock reset"]),
             ],
+            Task::SearchIndexingCleanup => vec![
+                ("powershell", vec!["-command", "Stop-Service WSearch"]),
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Remove-Item -Path 'C:\\ProgramData\\Microsoft\\Search\\Data' -Recurse -Force -ErrorAction SilentlyContinue",
+                    ],
+                ),
+                ("powershell", vec!["-command", "Start-Service WSearch"]),
+            ],
+            Task::BrowserCacheCleanup => vec![
+                ("cmd", vec!["/c", "del /s /q \"%localappdata%\\Google\\Chrome\\User Data\\Default\\Cache\\*\""]),
+                ("cmd", vec!["/c", "del /s /q \"%localappdata%\\Microsoft\\Edge\\User Data\\Default\\Cache\\*\""]),
+            ],
         };
 
         thread::spawn(move || {
@@ -148,6 +167,7 @@ impl Task {
         })
     }
 }
+
 
 
 
@@ -199,6 +219,8 @@ impl SystemMaintenanceApp {
                 Task::ClearEventLogs,
                 Task::ClearARP,
                 Task::ResetNetworkSettings,
+                Task::SearchIndexingCleanup,
+                Task::BrowserCacheCleanup,
             ],
             log: Arc::new(Mutex::new(String::new())),
             running_task: Arc::new(Mutex::new(false)),

@@ -1,6 +1,6 @@
 use eframe::egui;
-use std::sync::{Arc, Mutex};
 use std::process::{Command as SystemCommandProcess, Stdio};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 #[derive(Debug, Clone)]
@@ -143,9 +143,30 @@ impl Task {
                 ("powershell", vec!["-command", "Start-Service WSearch"]),
             ],
             Task::BrowserCacheCleanup => vec![
-                ("cmd", vec!["/c", "del /s /q \"%localappdata%\\Google\\Chrome\\User Data\\Default\\Cache\\*\""]),
-                ("cmd", vec!["/c", "del /s /q \"%localappdata%\\Microsoft\\Edge\\User Data\\Default\\Cache\\*\""]),
-            ],
+    (
+        "cmd",
+        vec![
+            "/c",
+            "for /d %i in (\"%localappdata%\\Google\\Chrome\\User Data\\Default\\Cache\\*\") do @rd /s /q \"%i\"",
+        ],
+    ),
+    (
+        "cmd",
+        vec![
+            "/c",
+            "for /d %i in (\"%localappdata%\\Microsoft\\Edge\\User Data\\Default\\Cache\\*\") do @rd /s /q \"%i\"",
+        ],
+    ),
+    (
+        "cmd",
+        vec![
+            "/c",
+            "for /d %i in (\"%localappdata%\\Mozilla\\Firefox\\Profiles\\*\\cache2\\*\") do @rd /s /q \"%i\"",
+        ],
+    ),
+],
+
+
         };
 
         thread::spawn(move || {
@@ -168,10 +189,6 @@ impl Task {
     }
 }
 
-
-
-
-
 fn exec_command(program: &str, args: &[&str]) -> Result<String, String> {
     let output = SystemCommandProcess::new(program)
         .args(args)
@@ -193,7 +210,6 @@ fn exec_command(program: &str, args: &[&str]) -> Result<String, String> {
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     Ok(stdout)
 }
-
 
 pub struct SystemMaintenanceApp {
     tasks: Vec<Task>,
@@ -262,7 +278,6 @@ impl eframe::App for SystemMaintenanceApp {
         });
     }
 }
-
 
 fn main() -> eframe::Result<()> {
     let app = SystemMaintenanceApp::new();

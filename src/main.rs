@@ -63,7 +63,7 @@ impl Task {
                     "powershell",
                     vec![
                         "-command",
-                        "Remove-Item -Path 'C:\\Temp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                        "Remove-Item -Path 'C:\\Windows\\SystemTemp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
                     ],
                 ),
             ],

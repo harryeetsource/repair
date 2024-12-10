@@ -32,6 +32,7 @@ impl Task {
             Task::HardenSystem => "Harden System",
         }
     }
+
     pub fn execute_commands(
         &self,
         log: Arc<Mutex<String>>,
@@ -50,14 +51,52 @@ impl Task {
                 ("cmd", vec!["/c", "net start wuauserv"]),
                 ("cmd", vec!["/c", "net start bits"]),
             ],
-            Task::TemporaryFilesCleanup => vec![(
-                "powershell",
-                vec!["-command", "Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force"],
-            )],
-            Task::FontCacheCleanup => vec![(
-                "powershell",
-                vec!["-command", "Stop-Service -Name 'fontcache'; Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*' -Recurse -Force; Start-Service -Name 'fontcache'"],
-            )],
+            Task::TemporaryFilesCleanup => vec![
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                    ],
+                ),
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Remove-Item -Path 'C:\\Temp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                    ],
+                ),
+            ],
+            Task::FontCacheCleanup => vec![
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Stop-Service -Name 'fontcache' -Force",
+                    ],
+                ),
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                    ],
+                ),
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache-System\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                    ],
+                ),
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Start-Service -Name 'fontcache'",
+                    ],
+                ),
+            ],
             Task::OptimizeSystem => vec![(
                 "powershell",
                 vec!["-command", "Optimize-Volume -DriveLetter C -Defrag -ReTrim"],
@@ -99,6 +138,7 @@ impl Task {
         })
     }
 }
+
 
 
 fn exec_command(program: &str, args: &[&str]) -> Result<String, String> {

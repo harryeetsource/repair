@@ -1,6 +1,7 @@
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 use std::process::{Command as SystemCommandProcess, Stdio};
+use tokio::runtime::Runtime;
 
 #[derive(Debug, Clone)]
 pub enum Task {
@@ -32,130 +33,68 @@ impl Task {
         }
     }
 
-    pub fn execute(&self, log: &Arc<Mutex<String>>) -> Result<(), String> {
-        match self {
-            Task::DiskCleanup => {
-                exec_command("cleanmgr", &["/sagerun:1"]).map_err(|e| {
-                    let mut log = log.lock().unwrap();
-                    log.push_str(&format!("Disk Cleanup failed: {}\n", e));
-                    e
-                })
+    pub fn execute_commands(
+        &self,
+        log: Arc<Mutex<String>>,
+        runtime: &Runtime,
+    ) -> tokio::task::JoinHandle<()> {
+        let commands = match self {
+            Task::DiskCleanup => vec![("cleanmgr", vec!["/sagerun:1"])],
+            Task::PrefetchCleanup => vec![(
+                "powershell",
+                vec!["-command", "Remove-Item -Path 'C:\\Windows\\Prefetch\\*' -Recurse -Force"],
+            )],
+            Task::WindowsUpdateCleanup => vec![
+                ("cmd", vec!["/c", "net stop wuauserv"]),
+                ("cmd", vec!["/c", "net stop bits"]),
+                ("cmd", vec!["/c", "rd /s /q C:\\Windows\\SoftwareDistribution"]),
+                ("cmd", vec!["/c", "net start wuauserv"]),
+                ("cmd", vec!["/c", "net start bits"]),
+            ],
+            Task::TemporaryFilesCleanup => vec![(
+                "powershell",
+                vec!["-command", "Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force"],
+            )],
+            Task::FontCacheCleanup => vec![(
+                "powershell",
+                vec!["-command", "Stop-Service -Name 'fontcache'; Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*' -Recurse -Force; Start-Service -Name 'fontcache'"],
+            )],
+            Task::OptimizeSystem => vec![(
+                "powershell",
+                vec!["-command", "Optimize-Volume -DriveLetter C -Defrag -ReTrim"],
+            )],
+            Task::FixComponents => vec![
+                ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup"]),
+                ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup", "/resetbase"]),
+                ("dism", vec!["/online", "/cleanup-image", "/spsuperseded"]),
+                ("dism", vec!["/online", "/cleanup-image", "/restorehealth"]),
+                ("sfc", vec!["/scannow"]),
+            ],
+            Task::UpdateDrivers => vec![(
+                "powershell",
+                vec!["-command", "Get-WmiObject Win32_PnPSignedDriver | foreach { $infPath = Get-ChildItem -Path C:\\Windows\\INF -Filter $_.InfName -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName; if ($infPath) { Invoke-Expression ('pnputil /add-driver ' + $infPath + ' /install') } }"],
+            )],
+            Task::EnableFullMemoryDumps => vec![(
+                "powershell",
+                vec!["-command", "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl' -Name 'CrashDumpEnabled' -Value 1"],
+            )],
+            Task::HardenSystem => vec![("netsh", vec!["advfirewall", "set", "allprofiles", "state", "on"])],
+        };
+
+        runtime.spawn(async move {
+            for (program, args) in commands {
+                let result = tokio::task::spawn_blocking(move || exec_command(program, &args)).await;
+
+                let mut log = log.lock().unwrap();
+                match result {
+                    Ok(Ok(())) => log.push_str(&format!("Command '{}' executed successfully.\n", program)),
+                    Ok(Err(e)) => log.push_str(&format!("Command '{}' failed: {}\n", program, e)),
+                    Err(e) => log.push_str(&format!("Failed to execute '{}': {:?}\n", program, e)),
+                }
             }
-            Task::PrefetchCleanup => {
-                exec_command(
-                    "powershell",
-                    &["-command", "Remove-Item -Path 'C:\\Windows\\Prefetch\\*' -Recurse -Force"],
-                )
-                .map_err(|e| {
-                    let mut log = log.lock().unwrap();
-                    log.push_str(&format!("Prefetch Cleanup failed: {}\n", e));
-                    e
-                })
-            }
-            Task::WindowsUpdateCleanup => {
-                let commands: Vec<(&str, Vec<&str>)> = vec![
-                    ("cmd", vec!["/c", "net stop wuauserv"]),
-                    ("cmd", vec!["/c", "net stop bits"]),
-                    ("cmd", vec!["/c", "rd /s /q C:\\Windows\\SoftwareDistribution"]),
-                    ("cmd", vec!["/c", "net start wuauserv"]),
-                    ("cmd", vec!["/c", "net start bits"]),
-                ];
-                execute_commands(&commands, log)
-            }
-            Task::TemporaryFilesCleanup => {
-                exec_command(
-                    "powershell",
-                    &["-command", "Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force"],
-                )
-                .map_err(|e| {
-                    let mut log = log.lock().unwrap();
-                    log.push_str(&format!("Temporary Files Cleanup failed: {}\n", e));
-                    e
-                })
-            }
-            Task::FontCacheCleanup => {
-                exec_command(
-                    "powershell",
-                    &["-command", "Stop-Service -Name 'fontcache'; Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*' -Recurse -Force; Start-Service -Name 'fontcache'"],
-                )
-                .map_err(|e| {
-                    let mut log = log.lock().unwrap();
-                    log.push_str(&format!("Font Cache Cleanup failed: {}\n", e));
-                    e
-                })
-            }
-            Task::OptimizeSystem => {
-                exec_command(
-                    "powershell",
-                    &["-command", "Optimize-Volume -DriveLetter C -Defrag -ReTrim"],
-                )
-                .map_err(|e| {
-                    let mut log = log.lock().unwrap();
-                    log.push_str(&format!("System Optimization failed: {}\n", e));
-                    e
-                })
-            }
-            Task::FixComponents => {
-                let commands: Vec<(&str, Vec<&str>)> = vec![
-                    ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup"]),
-                    ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup", "/resetbase"]),
-                    ("dism", vec!["/online", "/cleanup-image", "/spsuperseded"]),
-                    ("dism", vec!["/online", "/cleanup-image", "/restorehealth"]),
-                    ("sfc", vec!["/scannow"]),
-                ];
-                execute_commands(&commands, log)
-            }
-            Task::UpdateDrivers => {
-                exec_command(
-                    "powershell",
-                    &[
-                        "-command",
-                        "Get-WmiObject Win32_PnPSignedDriver | foreach { $infPath = Get-ChildItem -Path C:\\Windows\\INF -Filter $_.InfName -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName; if ($infPath) { Invoke-Expression ('pnputil /add-driver ' + $infPath + ' /install') } }",
-                    ],
-                )
-                .map_err(|e| {
-                    let mut log = log.lock().unwrap();
-                    log.push_str(&format!("Driver Update failed: {}\n", e));
-                    e
-                })
-            }
-            Task::EnableFullMemoryDumps => {
-                exec_command(
-                    "powershell",
-                    &["-command", "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl' -Name 'CrashDumpEnabled' -Value 1"],
-                )
-                .map_err(|e| {
-                    let mut log = log.lock().unwrap();
-                    log.push_str(&format!("Enable Full Memory Dumps failed: {}\n", e));
-                    e
-                })
-            }
-            Task::HardenSystem => {
-                exec_command(
-                    "netsh",
-                    &["advfirewall", "set", "allprofiles", "state", "on"],
-                )
-                .map_err(|e| {
-                    let mut log = log.lock().unwrap();
-                    log.push_str(&format!("System Hardening failed: {}\n", e));
-                    e
-                })
-            }
-        }
+        })
     }
 }
-
-fn execute_commands(commands: &[(&str, Vec<&str>)], log: &Arc<Mutex<String>>) -> Result<(), String> {
-    for &(program, ref args) in commands {
-        if let Err(e) = exec_command(program, args) {
-            let mut log = log.lock().unwrap();
-            log.push_str(&format!("Command `{}` with args {:?} failed: {}\n", program, args, e));
-        }
-    }
-    Ok(())
-}
-
-
 
 fn exec_command(program: &str, args: &[&str]) -> Result<(), String> {
     let output = SystemCommandProcess::new(program)
@@ -167,29 +106,25 @@ fn exec_command(program: &str, args: &[&str]) -> Result<(), String> {
         .map_err(|e| format!("Failed to start '{}': {}", program, e))?;
 
     if !output.status.success() {
-        // Extract the error code
-        let code = output.status.code().unwrap_or(-1); // Default to -1 if code is unavailable
+        let code = output.status.code().unwrap_or(-1);
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!(
             "Command '{}' failed with error code {}: {}",
             program, code, stderr
         ));
     }
-
     Ok(())
 }
 
-
-
-
-struct SystemMaintenanceApp {
+pub struct SystemMaintenanceApp {
     tasks: Vec<Task>,
     log: Arc<Mutex<String>>,
-    input: String,
+    runtime: Runtime,
 }
 
 impl SystemMaintenanceApp {
     pub fn new() -> Self {
+        let runtime = Runtime::new().expect("Failed to create tokio runtime");
         Self {
             tasks: vec![
                 Task::DiskCleanup,
@@ -204,7 +139,7 @@ impl SystemMaintenanceApp {
                 Task::HardenSystem,
             ],
             log: Arc::new(Mutex::new(String::new())),
-            input: String::new(),
+            runtime,
         }
     }
 }
@@ -214,39 +149,24 @@ impl eframe::App for SystemMaintenanceApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("System Maintenance");
 
-            // Task buttons
             for task in &self.tasks {
                 if ui.button(task.description()).clicked() {
-                    let result = task.execute(&self.log);
-                    let mut log = self.log.lock().unwrap();
-                    match result {
-                        Ok(_) => log.push_str(&format!("Task '{}' executed successfully.\n", task.description())),
-                        Err(e) => log.push_str(&format!("Task '{}' failed: {}\n", task.description(), e)),
-                    }
+                    task.execute_commands(self.log.clone(), &self.runtime);
                 }
             }
 
             ui.separator();
-
-            // Input field
-            ui.horizontal(|ui| {
-                ui.label("Input:");
-                ui.text_edit_singleline(&mut self.input);
-            });
-
-            ui.separator();
-
-            // Scrollable area for logs
             ui.label("Logs:");
             egui::ScrollArea::vertical()
-                .max_height(200.0) // Set max height for the scrollable area
+                .max_height(200.0)
                 .show(ui, |ui| {
                     ui.label(&*self.log.lock().unwrap());
                 });
+
+            ctx.request_repaint(); // Continuously repaint for updates
         });
     }
 }
-
 
 fn main() -> eframe::Result<()> {
     let app = SystemMaintenanceApp::new();

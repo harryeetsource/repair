@@ -1,7 +1,7 @@
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 use std::process::{Command as SystemCommandProcess, Stdio};
-use tokio::runtime::Runtime;
+use std::thread;
 
 #[derive(Debug, Clone)]
 pub enum Task {
@@ -36,8 +36,8 @@ impl Task {
     pub fn execute_commands(
         &self,
         log: Arc<Mutex<String>>,
-        runtime: &Runtime,
-    ) -> tokio::task::JoinHandle<()> {
+        running_flag: Arc<Mutex<bool>>,
+    ) -> thread::JoinHandle<()> {
         let commands = match self {
             Task::DiskCleanup => vec![("cleanmgr", vec!["/sagerun:1"])],
             Task::PrefetchCleanup => vec![(
@@ -81,17 +81,19 @@ impl Task {
             Task::HardenSystem => vec![("netsh", vec!["advfirewall", "set", "allprofiles", "state", "on"])],
         };
 
-        runtime.spawn(async move {
-            for (program, args) in commands {
-                let result = tokio::task::spawn_blocking(move || exec_command(program, &args)).await;
+        thread::spawn(move || {
+            *running_flag.lock().unwrap() = true;
 
+            for (program, args) in commands {
+                let result = exec_command(program, &args);
                 let mut log = log.lock().unwrap();
                 match result {
-                    Ok(Ok(())) => log.push_str(&format!("Command '{}' executed successfully.\n", program)),
-                    Ok(Err(e)) => log.push_str(&format!("Command '{}' failed: {}\n", program, e)),
-                    Err(e) => log.push_str(&format!("Failed to execute '{}': {:?}\n", program, e)),
+                    Ok(()) => log.push_str(&format!("Command '{}' executed successfully.\n", program)),
+                    Err(e) => log.push_str(&format!("Command '{}' failed: {}\n", program, e)),
                 }
             }
+
+            *running_flag.lock().unwrap() = false;
         })
     }
 }
@@ -119,12 +121,11 @@ fn exec_command(program: &str, args: &[&str]) -> Result<(), String> {
 pub struct SystemMaintenanceApp {
     tasks: Vec<Task>,
     log: Arc<Mutex<String>>,
-    runtime: Runtime,
+    running_task: Arc<Mutex<bool>>,
 }
 
 impl SystemMaintenanceApp {
     pub fn new() -> Self {
-        let runtime = Runtime::new().expect("Failed to create tokio runtime");
         Self {
             tasks: vec![
                 Task::DiskCleanup,
@@ -139,7 +140,7 @@ impl SystemMaintenanceApp {
                 Task::HardenSystem,
             ],
             log: Arc::new(Mutex::new(String::new())),
-            runtime,
+            running_task: Arc::new(Mutex::new(false)),
         }
     }
 }
@@ -150,12 +151,24 @@ impl eframe::App for SystemMaintenanceApp {
             ui.heading("System Maintenance");
 
             for task in &self.tasks {
-                if ui.button(task.description()).clicked() {
-                    task.execute_commands(self.log.clone(), &self.runtime);
+                if *self.running_task.lock().unwrap() {
+                    ui.label(format!("Running: {}", task.description()));
+                } else if ui.button(task.description()).clicked() {
+                    task.execute_commands(self.log.clone(), self.running_task.clone());
                 }
             }
 
             ui.separator();
+
+            // Show spinner or progress bar if a task is running
+            if *self.running_task.lock().unwrap() {
+                ui.label("Task is currently running...");
+                ui.add(egui::ProgressBar::new(0.5).animate(true));
+            }
+
+            ui.separator();
+
+            // Logs
             ui.label("Logs:");
             egui::ScrollArea::vertical()
                 .max_height(200.0)
@@ -163,7 +176,7 @@ impl eframe::App for SystemMaintenanceApp {
                     ui.label(&*self.log.lock().unwrap());
                 });
 
-            ctx.request_repaint(); // Continuously repaint for updates
+            ctx.request_repaint();
         });
     }
 }

@@ -15,6 +15,10 @@ pub enum Task {
     UpdateDrivers,
     EnableFullMemoryDumps,
     HardenSystem,
+    FlushDNSCache,
+    ClearEventLogs,
+    ClearARP,
+    ResetNetworkSettings
 }
 
 impl Task {
@@ -30,6 +34,10 @@ impl Task {
             Task::UpdateDrivers => "Update Drivers",
             Task::EnableFullMemoryDumps => "Enable Full Memory Dumps",
             Task::HardenSystem => "Harden System",
+            Task::FlushDNSCache => "Flush DNS Cache",
+            Task::ClearEventLogs => "Clear Event Logs",
+            Task::ClearARP => "Clear ARP Cache",
+            Task::ResetNetworkSettings => "Reset Network Settings",
         }
     }
 
@@ -70,10 +78,7 @@ impl Task {
             Task::FontCacheCleanup => vec![
                 (
                     "powershell",
-                    vec![
-                        "-command",
-                        "Stop-Service -Name 'fontcache' -Force",
-                    ],
+                    vec!["-command", "Stop-Service -Name 'fontcache' -Force"],
                 ),
                 (
                     "powershell",
@@ -89,13 +94,7 @@ impl Task {
                         "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache-System\\*' -Recurse -Force -ErrorAction SilentlyContinue",
                     ],
                 ),
-                (
-                    "powershell",
-                    vec![
-                        "-command",
-                        "Start-Service -Name 'fontcache'",
-                    ],
-                ),
+                ("powershell", vec!["-command", "Start-Service -Name 'fontcache'"]),
             ],
             Task::OptimizeSystem => vec![(
                 "powershell",
@@ -117,6 +116,17 @@ impl Task {
                 vec!["-command", "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl' -Name 'CrashDumpEnabled' -Value 1"],
             )],
             Task::HardenSystem => vec![("netsh", vec!["advfirewall", "set", "allprofiles", "state", "on"])],
+            Task::FlushDNSCache => vec![("cmd", vec!["/c", "ipconfig /flushdns"])],
+            Task::ClearEventLogs => vec![
+                ("wevtutil", vec!["cl", "Application"]),
+                ("wevtutil", vec!["cl", "Security"]),
+                ("wevtutil", vec!["cl", "System"]),
+            ],
+            Task::ClearARP => vec![("cmd", vec!["/c", "arp -d *"])],
+            Task::ResetNetworkSettings => vec![
+                ("cmd", vec!["/c", "netsh int ip reset"]),
+                ("cmd", vec!["/c", "netsh winsock reset"]),
+            ],
         };
 
         thread::spawn(move || {
@@ -138,6 +148,7 @@ impl Task {
         })
     }
 }
+
 
 
 
@@ -184,6 +195,10 @@ impl SystemMaintenanceApp {
                 Task::UpdateDrivers,
                 Task::EnableFullMemoryDumps,
                 Task::HardenSystem,
+                Task::FlushDNSCache,
+                Task::ClearEventLogs,
+                Task::ClearARP,
+                Task::ResetNetworkSettings,
             ],
             log: Arc::new(Mutex::new(String::new())),
             running_task: Arc::new(Mutex::new(false)),

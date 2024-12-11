@@ -120,8 +120,19 @@ impl Task {
             ],
             Task::UpdateDrivers => vec![(
                 "powershell",
-                vec!["-command", "Get-WmiObject Win32_PnPSignedDriver | foreach { $infPath = Get-ChildItem -Path C:\\Windows\\INF -Filter $_.InfName -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName; if ($infPath) { Invoke-Expression ('pnputil /add-driver ' + $infPath + ' /install') } }"],
-            )],
+                vec![
+                    "-command",
+                    r#"
+                        Get-WmiObject Win32_PnPSignedDriver | ForEach-Object {
+                            $infPath = Get-ChildItem -Path C:\Windows\INF -Filter $_.InfName -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName;
+                            if ($infPath) {
+                                pnputil /add-driver $infPath /install /subdirs
+                            }
+                        }
+                    "#,
+                ],
+            ),
+            ],
             Task::EnableFullMemoryDumps => vec![(
                 "powershell",
                 vec!["-command", "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl' -Name 'CrashDumpEnabled' -Value 1"],

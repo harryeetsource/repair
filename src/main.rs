@@ -190,6 +190,9 @@ impl Task {
 }
 
 fn exec_command(program: &str, args: &[&str]) -> Result<String, String> {
+    // Log the command being executed
+    println!("Executing command: {} {}", program, args.join(" "));
+    
     let output = SystemCommandProcess::new(program)
         .args(args)
         .stdout(Stdio::piped())
@@ -210,6 +213,7 @@ fn exec_command(program: &str, args: &[&str]) -> Result<String, String> {
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     Ok(stdout)
 }
+
 
 pub struct SystemMaintenanceApp {
     tasks: Vec<Task>,

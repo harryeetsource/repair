@@ -173,7 +173,11 @@ impl Task {
             *running_flag.lock().unwrap() = true;
 
             for (program, args) in commands {
-                let result = exec_command(program, &args);
+                {
+                    let mut log = log.lock().unwrap();
+                    log.push_str(&format!("Executing: {} {}\n", program, args.join(" ")));
+                }
+                let result = exec_command(program, &args, log.clone());
                 let mut log = log.lock().unwrap();
                 match result {
                     Ok(output) => {
@@ -183,16 +187,24 @@ impl Task {
                     Err(e) => log.push_str(&format!("Command '{}' failed: {}\n", program, e)),
                 }
             }
+            
 
             *running_flag.lock().unwrap() = false;
         })
     }
 }
 
-fn exec_command(program: &str, args: &[&str]) -> Result<String, String> {
-    // Log the command being executed
-    println!("Executing command: {} {}", program, args.join(" "));
-    
+fn exec_command(program: &str, args: &[&str], log: Arc<Mutex<String>>) -> Result<String, String> {
+    // Log the command being executed in the scrollable log
+    {
+        let mut log_guard = log.lock().unwrap();
+        log_guard.push_str(&format!(
+            "Executing command: {} {}\n",
+            program,
+            args.join(" ")
+        ));
+    }
+
     let output = SystemCommandProcess::new(program)
         .args(args)
         .stdout(Stdio::piped())
@@ -213,6 +225,7 @@ fn exec_command(program: &str, args: &[&str]) -> Result<String, String> {
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     Ok(stdout)
 }
+
 
 
 pub struct SystemMaintenanceApp {

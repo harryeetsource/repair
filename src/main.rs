@@ -51,7 +51,13 @@ impl Task {
         running_flag: Arc<Mutex<bool>>,
     ) -> thread::JoinHandle<()> {
         let commands = match self {
-            Task::DiskCleanup => vec![("cleanmgr", vec!["/sagerun:1"])],
+            Task::DiskCleanup => vec![
+                ("cleanmgr", vec!["/sagerun:1"]),
+                (
+                    "powershell",
+                    vec!["-command", "Optimize-Volume -DriveLetter C -Defrag -ReTrim"],
+            ),
+                ],
             Task::PrefetchCleanup => vec![(
                 "powershell",
                 vec!["-command", "Remove-Item -Path 'C:\\Windows\\Prefetch\\*' -Recurse -Force"],
@@ -101,9 +107,10 @@ impl Task {
                 ("powershell", vec!["-command", "Start-Service -Name 'fontcache'"]),
             ],
             Task::OptimizeSystem => vec![(
-                "powershell",
-                vec!["-command", "Optimize-Volume -DriveLetter C -Defrag -ReTrim"],
+                "Rundll32.exe",
+                vec!["advapi32.dll,ProcessIdleTasks"],
             )],
+            
             Task::FixComponents => vec![
                 ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup"]),
                 ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup", "/resetbase"]),

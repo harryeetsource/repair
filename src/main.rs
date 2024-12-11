@@ -10,7 +10,7 @@ pub enum Task {
     WindowsUpdateCleanup,
     TemporaryFilesCleanup,
     FontCacheCleanup,
-    OptimizeSystem,
+    DisableSysmain,
     FixComponents,
     UpdateDrivers,
     EnableFullMemoryDumps,
@@ -31,7 +31,7 @@ impl Task {
             Task::WindowsUpdateCleanup => "Clean Windows Update Cache",
             Task::TemporaryFilesCleanup => "Remove Temporary Files",
             Task::FontCacheCleanup => "Clean Font Cache",
-            Task::OptimizeSystem => "Optimize System",
+            Task::DisableSysmain => "Optimize System",
             Task::FixComponents => "Fix Components",
             Task::UpdateDrivers => "Update Drivers",
             Task::EnableFullMemoryDumps => "Enable Full Memory Dumps",
@@ -106,10 +106,10 @@ impl Task {
                 ),
                 ("powershell", vec!["-command", "Start-Service -Name 'fontcache'"]),
             ],
-            Task::OptimizeSystem => vec![(
-                "Rundll32.exe",
-                vec!["advapi32.dll,ProcessIdleTasks"],
-            )],
+            Task::DisableSysmain => vec![(
+                "powershell",
+                vec!["-command", "Set-Service -Name SysMain -StartupType Disabled; Stop-Service -Name SysMain"],
+            ),],
             
             Task::FixComponents => vec![
                 ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup"]),
@@ -248,7 +248,7 @@ impl SystemMaintenanceApp {
                 Task::WindowsUpdateCleanup,
                 Task::TemporaryFilesCleanup,
                 Task::FontCacheCleanup,
-                Task::OptimizeSystem,
+                Task::DisableSysmain,
                 Task::FixComponents,
                 Task::UpdateDrivers,
                 Task::EnableFullMemoryDumps,

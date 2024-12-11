@@ -21,6 +21,7 @@ pub enum Task {
     ResetNetworkSettings,
     SearchIndexingCleanup,
     BrowserCacheCleanup,
+    CreateRestorePoint,
 }
 
 impl Task {
@@ -42,6 +43,7 @@ impl Task {
             Task::ResetNetworkSettings => "Reset Network Settings",
             Task::SearchIndexingCleanup => "Rebuild Search Index",
             Task::BrowserCacheCleanup => "Clean Browser Cache",
+            Task::CreateRestorePoint => "Create a System Restore Point",
         }
     }
 
@@ -113,7 +115,15 @@ impl Task {
     ),
 ],
 
-            
+Task::CreateRestorePoint => vec![
+    (
+        "powershell",
+        vec![
+            "-command",
+            r#"Checkpoint-Computer -Description 'System Maintenance Restore Point' -RestorePointType 'MODIFY_SETTINGS'"#,
+        ],
+    ),
+],
             Task::FixComponents => vec![
                 ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup"]),
                 ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup", "/resetbase"]),

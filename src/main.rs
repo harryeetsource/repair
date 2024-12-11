@@ -31,7 +31,7 @@ impl Task {
             Task::WindowsUpdateCleanup => "Clean Windows Update Cache",
             Task::TemporaryFilesCleanup => "Remove Temporary Files",
             Task::FontCacheCleanup => "Clean Font Cache",
-            Task::DisableHibernation => "Optimize System",
+            Task::DisableHibernation => "Disable Hibernation",
             Task::FixComponents => "Fix Components",
             Task::UpdateDrivers => "Update Drivers",
             Task::EnableFullMemoryDumps => "Enable Full Memory Dumps",

@@ -22,6 +22,9 @@ pub enum Task {
     SearchIndexingCleanup,
     BrowserCacheCleanup,
     CreateRestorePoint,
+    RestartPrintSpooler,
+    CheckWMIIntegrity,
+    SalvageWMI,
 }
 
 impl Task {
@@ -44,6 +47,9 @@ impl Task {
             Task::SearchIndexingCleanup => "Rebuild Search Index",
             Task::BrowserCacheCleanup => "Clean Browser Cache",
             Task::CreateRestorePoint => "Create a System Restore Point",
+            Task::RestartPrintSpooler => "Restart the Spooler service",
+            Task::CheckWMIIntegrity => "Check WMI repository integrity",
+            Task::SalvageWMI => "Salvage WMI repository",
         }
     }
 
@@ -109,21 +115,21 @@ impl Task {
                 ("powershell", vec!["-command", "Start-Service -Name 'fontcache'"]),
             ],
             Task::DisableHibernation => vec![
-    (
-        "powershell",
-        vec!["-command", "powercfg -h off"],
-    ),
-],
+            (
+            "powershell",
+            vec!["-command", "powercfg -h off"],
+            ),
+            ],
 
-Task::CreateRestorePoint => vec![
-    (
-        "powershell",
-        vec![
+            Task::CreateRestorePoint => vec![
+            (
+            "powershell",
+                vec![
             "-command",
             r#"Checkpoint-Computer -Description 'System Maintenance Restore Point' -RestorePointType 'MODIFY_SETTINGS'"#,
-        ],
-    ),
-],
+                ],
+                ),
+            ],
             Task::FixComponents => vec![
                 ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup"]),
                 ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup", "/resetbase"]),
@@ -134,18 +140,53 @@ Task::CreateRestorePoint => vec![
             Task::UpdateDrivers => vec![(
                 "powershell",
                 vec![
-                    "-command",
-                    r#"
-                        Get-WmiObject Win32_PnPSignedDriver | ForEach-Object {
-                            $infPath = Get-ChildItem -Path C:\Windows\INF -Filter $_.InfName -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName;
-                            if ($infPath) {
-                                pnputil /add-driver $infPath /install /subdirs
-                            }
+        "-command",
+        r#"
+            # Build a cache of INF files to avoid repetitive recursive searches.
+            $infCache = @{}
+            Get-ChildItem -Path C:\Windows\INF -Filter *.inf -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+                $infCache[$_.Name] = $_.FullName
+            }
+
+            # Use Get-CimInstance to enumerate signed drivers.
+            Get-CimInstance Win32_PnPSignedDriver | ForEach-Object {
+                if ($_.InfName) {
+                    $infName = $_.InfName
+                    if ($infCache.ContainsKey($infName)) {
+                        $infPath = $infCache[$infName]
+                        Write-Output "Updating driver for device: $($_.DeviceName) using INF: $infPath"
+                        try {
+                            $pnputilResult = pnputil /add-driver $infPath /install /subdirs
+                            Write-Output "Result for $($_.DeviceName): $pnputilResult"
                         }
-                    "#,
-                ],
+                        catch {
+                            Write-Output "Error updating driver for device: $($_.DeviceName): $_"
+                        }
+                    }
+                    else {
+                        Write-Output "INF file '$infName' not found in C:\Windows\INF for device: $($_.DeviceName)"
+                    }
+                }
+                else {
+                    Write-Output "No INF file specified for device: $($_.DeviceName)"
+                }
+            }
+        "#,
+    ],
             ),
             ],
+            Task::RestartPrintSpooler => vec![(
+                "powershell",
+                vec!["-command", "Restart-Service -Name 'Spooler'"]
+            )],
+            Task::CheckWMIIntegrity => vec![(
+                "winmgmt",
+                vec!["/verifyrepository"]
+            )],
+            Task::SalvageWMI => vec![(
+                "winmgmt",
+                vec!["/salvagerepository"]
+            )],
             Task::EnableFullMemoryDumps => vec![(
                 "powershell",
                 vec!["-command", "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl' -Name 'CrashDumpEnabled' -Value 1"],
@@ -214,8 +255,6 @@ Task::CreateRestorePoint => vec![
                     Err(e) => log.push_str(&format!("Command '{}' failed: {}\n", program, e)),
                 }
             }
-            
-            
 
             *running_flag.lock().unwrap() = false;
         })
@@ -254,9 +293,6 @@ fn exec_command(program: &str, args: &[&str], log: Arc<Mutex<String>>) -> Result
     Ok(stdout)
 }
 
-
-
-
 pub struct SystemMaintenanceApp {
     tasks: Vec<Task>,
     log: Arc<Mutex<String>>,
@@ -283,6 +319,9 @@ impl SystemMaintenanceApp {
                 Task::ResetNetworkSettings,
                 Task::SearchIndexingCleanup,
                 Task::BrowserCacheCleanup,
+                Task::RestartPrintSpooler,
+                Task::CheckWMIIntegrity,
+                Task::SalvageWMI,
             ],
             log: Arc::new(Mutex::new(String::new())),
             running_task: Arc::new(Mutex::new(false)),

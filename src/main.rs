@@ -61,87 +61,78 @@ impl Task {
         let commands = match self {
             Task::DiskCleanup => vec![
                 ("cleanmgr", vec!["/sagerun:1"]),
-                (
-                    "powershell",
-                    vec!["-command", "Optimize-Volume -DriveLetter C -Defrag -ReTrim"],
-            ),
-                ],
-            Task::PrefetchCleanup => vec![(
-                "powershell",
-                vec!["-command", "Remove-Item -Path 'C:\\Windows\\Prefetch\\*' -Recurse -Force"],
-            )],
+                ("powershell", vec![
+                    "-command",
+                    "Optimize-Volume -DriveLetter C -Defrag -ReTrim",
+                ]),
+            ],
+            Task::PrefetchCleanup => vec![("powershell", vec![
+                "-command",
+                "Remove-Item -Path 'C:\\Windows\\Prefetch\\*' -Recurse -Force",
+            ])],
             Task::WindowsUpdateCleanup => vec![
                 ("cmd", vec!["/c", "net stop wuauserv"]),
                 ("cmd", vec!["/c", "net stop bits"]),
-                ("cmd", vec!["/c", "rd /s /q C:\\Windows\\SoftwareDistribution"]),
+                ("cmd", vec![
+                    "/c",
+                    "rd /s /q C:\\Windows\\SoftwareDistribution",
+                ]),
                 ("cmd", vec!["/c", "net start wuauserv"]),
                 ("cmd", vec!["/c", "net start bits"]),
             ],
             Task::TemporaryFilesCleanup => vec![
-                (
-                    "powershell",
-                    vec![
-                        "-command",
-                        "Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
-                    ],
-                ),
-                (
-                    "powershell",
-                    vec![
-                        "-command",
-                        "Remove-Item -Path 'C:\\Windows\\SystemTemp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
-                    ],
-                ),
+                ("powershell", vec![
+                    "-command",
+                    "Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                ]),
+                ("powershell", vec![
+                    "-command",
+                    "Remove-Item -Path 'C:\\Windows\\SystemTemp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                ]),
             ],
             Task::FontCacheCleanup => vec![
-                (
-                    "powershell",
-                    vec!["-command", "Stop-Service -Name 'fontcache' -Force"],
-                ),
-                (
-                    "powershell",
-                    vec![
-                        "-command",
-                        "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*' -Recurse -Force -ErrorAction SilentlyContinue",
-                    ],
-                ),
-                (
-                    "powershell",
-                    vec![
-                        "-command",
-                        "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache-System\\*' -Recurse -Force -ErrorAction SilentlyContinue",
-                    ],
-                ),
-                ("powershell", vec!["-command", "Start-Service -Name 'fontcache'"]),
+                ("powershell", vec![
+                    "-command",
+                    "Stop-Service -Name 'fontcache' -Force",
+                ]),
+                ("powershell", vec![
+                    "-command",
+                    "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                ]),
+                ("powershell", vec![
+                    "-command",
+                    "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache-System\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                ]),
+                ("powershell", vec![
+                    "-command",
+                    "Start-Service -Name 'fontcache'",
+                ]),
             ],
-            Task::DisableHibernation => vec![
-            (
-            "powershell",
-            vec!["-command", "powercfg -h off"],
-            ),
-            ],
+            Task::DisableHibernation => vec![("powershell", vec!["-command", "powercfg -h off"])],
 
-            Task::CreateRestorePoint => vec![
-            (
-            "powershell",
-                vec![
-            "-command",
-            r#"Checkpoint-Computer -Description 'System Maintenance Restore Point' -RestorePointType 'MODIFY_SETTINGS'"#,
-                ],
-                ),
-            ],
+            Task::CreateRestorePoint => vec![("powershell", vec![
+                "-command",
+                r#"Checkpoint-Computer -Description 'System Maintenance Restore Point' -RestorePointType 'MODIFY_SETTINGS'"#,
+            ])],
             Task::FixComponents => vec![
-                ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup"]),
-                ("dism", vec!["/online", "/cleanup-image", "/startcomponentcleanup", "/resetbase"]),
+                ("dism", vec![
+                    "/online",
+                    "/cleanup-image",
+                    "/startcomponentcleanup",
+                ]),
+                ("dism", vec![
+                    "/online",
+                    "/cleanup-image",
+                    "/startcomponentcleanup",
+                    "/resetbase",
+                ]),
                 ("dism", vec!["/online", "/cleanup-image", "/spsuperseded"]),
                 ("dism", vec!["/online", "/cleanup-image", "/restorehealth"]),
                 ("sfc", vec!["/scannow"]),
             ],
-            Task::UpdateDrivers => vec![(
-                "powershell",
-                vec![
-        "-command",
-        r#"
+            Task::UpdateDrivers => vec![("powershell", vec![
+                "-command",
+                r#"
             # Build a cache of INF files to avoid repetitive recursive searches.
             $infCache = @{}
             Get-ChildItem -Path C:\Windows\INF -Filter *.inf -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
@@ -172,26 +163,24 @@ impl Task {
                 }
             }
         "#,
-    ],
-            ),
-            ],
-            Task::RestartPrintSpooler => vec![(
-                "powershell",
-                vec!["-command", "Restart-Service -Name 'Spooler'"]
-            )],
-            Task::CheckWMIIntegrity => vec![(
-                "winmgmt",
-                vec!["/verifyrepository"]
-            )],
-            Task::SalvageWMI => vec![(
-                "winmgmt",
-                vec!["/salvagerepository"]
-            )],
-            Task::EnableFullMemoryDumps => vec![(
-                "powershell",
-                vec!["-command", "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl' -Name 'CrashDumpEnabled' -Value 1"],
-            )],
-            Task::HardenSystem => vec![("netsh", vec!["advfirewall", "set", "allprofiles", "state", "on"])],
+            ])],
+            Task::RestartPrintSpooler => vec![("powershell", vec![
+                "-command",
+                "Restart-Service -Name 'Spooler'",
+            ])],
+            Task::CheckWMIIntegrity => vec![("winmgmt", vec!["/verifyrepository"])],
+            Task::SalvageWMI => vec![("winmgmt", vec!["/salvagerepository"])],
+            Task::EnableFullMemoryDumps => vec![("powershell", vec![
+                "-command",
+                "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl' -Name 'CrashDumpEnabled' -Value 1",
+            ])],
+            Task::HardenSystem => vec![("netsh", vec![
+                "advfirewall",
+                "set",
+                "allprofiles",
+                "state",
+                "on",
+            ])],
             Task::FlushDNSCache => vec![("cmd", vec!["/c", "ipconfig /flushdns"])],
             Task::ClearEventLogs => vec![
                 ("wevtutil", vec!["cl", "Application"]),
@@ -205,40 +194,26 @@ impl Task {
             ],
             Task::SearchIndexingCleanup => vec![
                 ("powershell", vec!["-command", "Stop-Service WSearch"]),
-                (
-                    "powershell",
-                    vec![
-                        "-command",
-                        "Remove-Item -Path 'C:\\ProgramData\\Microsoft\\Search\\Data' -Recurse -Force -ErrorAction SilentlyContinue",
-                    ],
-                ),
+                ("powershell", vec![
+                    "-command",
+                    "Remove-Item -Path 'C:\\ProgramData\\Microsoft\\Search\\Data' -Recurse -Force -ErrorAction SilentlyContinue",
+                ]),
                 ("powershell", vec!["-command", "Start-Service WSearch"]),
             ],
             Task::BrowserCacheCleanup => vec![
-    (
-        "cmd",
-        vec![
-            "/c",
-            "for /d %i in (\"%localappdata%\\Google\\Chrome\\User Data\\Default\\Cache\\*\") do @rd /s /q \"%i\"",
-        ],
-    ),
-    (
-        "cmd",
-        vec![
-            "/c",
-            "for /d %i in (\"%localappdata%\\Microsoft\\Edge\\User Data\\Default\\Cache\\*\") do @rd /s /q \"%i\"",
-        ],
-    ),
-    (
-        "cmd",
-        vec![
-            "/c",
-            "for /d %i in (\"%localappdata%\\Mozilla\\Firefox\\Profiles\\*\\cache2\\*\") do @rd /s /q \"%i\"",
-        ],
-    ),
-],
-
-
+                ("cmd", vec![
+                    "/c",
+                    "for /d %i in (\"%localappdata%\\Google\\Chrome\\User Data\\Default\\Cache\\*\") do @rd /s /q \"%i\"",
+                ]),
+                ("cmd", vec![
+                    "/c",
+                    "for /d %i in (\"%localappdata%\\Microsoft\\Edge\\User Data\\Default\\Cache\\*\") do @rd /s /q \"%i\"",
+                ]),
+                ("cmd", vec![
+                    "/c",
+                    "for /d %i in (\"%localappdata%\\Mozilla\\Firefox\\Profiles\\*\\cache2\\*\") do @rd /s /q \"%i\"",
+                ]),
+            ],
         };
 
         thread::spawn(move || {

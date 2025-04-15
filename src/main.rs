@@ -191,6 +191,8 @@ impl Task {
             Task::ResetNetworkSettings => vec![
                 ("cmd", vec!["/c", "netsh int ip reset"]),
                 ("cmd", vec!["/c", "netsh winsock reset"]),
+                ("cmd", vec!["/c", "ipconfig /release"]),
+                ("cmd", vec!["/c", "ipconfig /renew"]),
             ],
             Task::SearchIndexingCleanup => vec![
                 ("powershell", vec!["-command", "Stop-Service WSearch"]),

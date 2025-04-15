@@ -1,8 +1,8 @@
 use eframe::egui;
+use std::io::{BufRead, BufReader};
 use std::process::{Command as SystemCommandProcess, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::io::{BufRead, BufReader};
 #[derive(Debug, Clone)]
 pub enum Task {
     DiskCleanup,
@@ -25,32 +25,43 @@ pub enum Task {
     RestartPrintSpooler,
     CheckWMIIntegrity,
     SalvageWMI,
-
+    HardwareBenchmark,
+    PowerEfficiencyReport,
 }
+#[derive(PartialEq)]
+enum AppSection {
+    Repairs,
+    Reports,
+    Configuration,
+    Logs,
+}
+
 
 impl Task {
     pub fn task_description(&self) -> &str {
         match self {
-            Task::DiskCleanup => "Perform Disk Cleanup",
-            Task::PrefetchCleanup => "Clean Prefetch Files",
-            Task::WindowsUpdateCleanup => "Clean Windows Update Cache",
-            Task::TemporaryFilesCleanup => "Remove Temporary Files",
-            Task::FontCacheCleanup => "Clean Font Cache",
-            Task::DisableHibernation => "Disable Hibernation",
-            Task::FixComponents => "Fix Components",
-            Task::UpdateDrivers => "Update Drivers",
-            Task::EnableFullMemoryDumps => "Enable Full Memory Dumps",
-            Task::HardenSystem => "Harden System",
-            Task::FlushDNSCache => "Flush DNS Cache",
-            Task::ClearEventLogs => "Clear Event Logs",
-            Task::ClearARP => "Clear ARP Cache",
-            Task::ResetNetworkSettings => "Reset Network Settings",
-            Task::SearchIndexingCleanup => "Rebuild Search Index",
-            Task::BrowserCacheCleanup => "Clean Browser Cache",
-            Task::CreateRestorePoint => "Create a System Restore Point",
-            Task::RestartPrintSpooler => "Restart the Spooler service",
-            Task::CheckWMIIntegrity => "Check WMI repository integrity",
-            Task::SalvageWMI => "Salvage WMI repository",
+            Task::DiskCleanup => "Repair: Perform Disk Cleanup",
+            Task::PrefetchCleanup => "Repair: Clean Prefetch Files",
+            Task::WindowsUpdateCleanup => "Repair: Clean Windows Update Cache",
+            Task::TemporaryFilesCleanup => "Repair: Remove Temporary Files",
+            Task::FontCacheCleanup => "Repair: Clean Font Cache",
+            Task::DisableHibernation => "Configuration: Disable Hibernation",
+            Task::FixComponents => "Repair: Fix Components",
+            Task::UpdateDrivers => "Repair: Update Drivers",
+            Task::EnableFullMemoryDumps => "Repair: Enable Full Memory Dumps",
+            Task::HardenSystem => "Configuration: Harden System",
+            Task::FlushDNSCache => "Repair: Flush DNS Cache",
+            Task::ClearEventLogs => "Repair: Clear Event Logs",
+            Task::ClearARP => "Repair: Clear ARP Cache",
+            Task::ResetNetworkSettings => "Repair: Reset Network Settings",
+            Task::SearchIndexingCleanup => "Repair: Rebuild Search Index",
+            Task::BrowserCacheCleanup => "Repair: Clean Browser Cache",
+            Task::CreateRestorePoint => "Repair: Create a System Restore Point",
+            Task::RestartPrintSpooler => "Repair: Restart the Spooler service",
+            Task::CheckWMIIntegrity => "Repair: Check WMI repository integrity",
+            Task::SalvageWMI => "Repair: Salvage WMI repository",
+            Task::HardwareBenchmark => "Report: Generate system benchmark report",
+            Task::PowerEfficiencyReport => "Report: Generate power efficiency report",
         }
     }
 
@@ -63,78 +74,100 @@ impl Task {
         let commands = match self {
             Task::DiskCleanup => vec![
                 ("cleanmgr", vec!["/sagerun:1"]),
-                ("powershell", vec![
-                    "-command",
-                    "Optimize-Volume -DriveLetter C -Defrag -ReTrim",
-                ]),
+                (
+                    "powershell",
+                    vec!["-command", "Optimize-Volume -DriveLetter C -Defrag -ReTrim"],
+                ),
             ],
-            Task::PrefetchCleanup => vec![("powershell", vec![
-                "-command",
-                "Remove-Item -Path 'C:\\Windows\\Prefetch\\*' -Recurse -Force",
-            ])],
+            Task::PrefetchCleanup => vec![(
+                "powershell",
+                vec![
+                    "-command",
+                    "Remove-Item -Path 'C:\\Windows\\Prefetch\\*' -Recurse -Force",
+                ],
+            )],
             Task::WindowsUpdateCleanup => vec![
                 ("cmd", vec!["/c", "net stop wuauserv"]),
                 ("cmd", vec!["/c", "net stop bits"]),
-                ("cmd", vec![
-                    "/c",
-                    "rd /s /q C:\\Windows\\SoftwareDistribution",
-                ]),
+                (
+                    "cmd",
+                    vec!["/c", "rd /s /q C:\\Windows\\SoftwareDistribution"],
+                ),
                 ("cmd", vec!["/c", "net start wuauserv"]),
                 ("cmd", vec!["/c", "net start bits"]),
             ],
             Task::TemporaryFilesCleanup => vec![
-                ("powershell", vec![
-                    "-command",
-                    "Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
-                ]),
-                ("powershell", vec![
-                    "-command",
-                    "Remove-Item -Path 'C:\\Windows\\SystemTemp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
-                ]),
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Remove-Item -Path 'C:\\Windows\\Temp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                    ],
+                ),
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Remove-Item -Path 'C:\\Windows\\SystemTemp\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                    ],
+                ),
             ],
             Task::FontCacheCleanup => vec![
-                ("powershell", vec![
-                    "-command",
-                    "Stop-Service -Name 'fontcache' -Force",
-                ]),
-                ("powershell", vec![
-                    "-command",
-                    "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*' -Recurse -Force -ErrorAction SilentlyContinue",
-                ]),
-                ("powershell", vec![
-                    "-command",
-                    "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache-System\\*' -Recurse -Force -ErrorAction SilentlyContinue",
-                ]),
-                ("powershell", vec![
-                    "-command",
-                    "Start-Service -Name 'fontcache'",
-                ]),
+                (
+                    "powershell",
+                    vec!["-command", "Stop-Service -Name 'fontcache' -Force"],
+                ),
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                    ],
+                ),
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Remove-Item -Path 'C:\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache-System\\*' -Recurse -Force -ErrorAction SilentlyContinue",
+                    ],
+                ),
+                (
+                    "powershell",
+                    vec!["-command", "Start-Service -Name 'fontcache'"],
+                ),
             ],
             Task::DisableHibernation => vec![("powershell", vec!["-command", "powercfg -h off"])],
 
-            Task::CreateRestorePoint => vec![("powershell", vec![
-                "-command",
-                r#"Checkpoint-Computer -Description 'System Maintenance Restore Point' -RestorePointType 'MODIFY_SETTINGS'"#,
-            ])],
+            Task::CreateRestorePoint => vec![(
+                "powershell",
+                vec![
+                    "-command",
+                    r#"Checkpoint-Computer -Description 'System Maintenance Restore Point' -RestorePointType 'MODIFY_SETTINGS'"#,
+                ],
+            )],
             Task::FixComponents => vec![
-                ("dism", vec![
-                    "/online",
-                    "/cleanup-image",
-                    "/startcomponentcleanup",
-                ]),
-                ("dism", vec![
-                    "/online",
-                    "/cleanup-image",
-                    "/startcomponentcleanup",
-                    "/resetbase",
-                ]),
+                (
+                    "dism",
+                    vec!["/online", "/cleanup-image", "/startcomponentcleanup"],
+                ),
+                (
+                    "dism",
+                    vec![
+                        "/online",
+                        "/cleanup-image",
+                        "/startcomponentcleanup",
+                        "/resetbase",
+                    ],
+                ),
                 ("dism", vec!["/online", "/cleanup-image", "/spsuperseded"]),
                 ("dism", vec!["/online", "/cleanup-image", "/restorehealth"]),
                 ("sfc", vec!["/scannow"]),
             ],
-            Task::UpdateDrivers => vec![("powershell", vec![
-                "-command",
-                r#"
+            Task::UpdateDrivers => vec![(
+                "powershell",
+                vec![
+                    "-command",
+                    r#"
             # Build a cache of INF files to avoid repetitive recursive searches.
             $infCache = @{}
             Get-ChildItem -Path C:\Windows\INF -Filter *.inf -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
@@ -165,24 +198,25 @@ impl Task {
                 }
             }
         "#,
-            ])],
-            Task::RestartPrintSpooler => vec![("powershell", vec![
-                "-command",
-                "Restart-Service -Name 'Spooler'",
-            ])],
+                ],
+            )],
+            Task::RestartPrintSpooler => vec![(
+                "powershell",
+                vec!["-command", "Restart-Service -Name 'Spooler'"],
+            )],
             Task::CheckWMIIntegrity => vec![("winmgmt", vec!["/verifyrepository"])],
             Task::SalvageWMI => vec![("winmgmt", vec!["/salvagerepository"])],
-            Task::EnableFullMemoryDumps => vec![("powershell", vec![
-                "-command",
-                "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl' -Name 'CrashDumpEnabled' -Value 1",
-            ])],
-            Task::HardenSystem => vec![("netsh", vec![
-                "advfirewall",
-                "set",
-                "allprofiles",
-                "state",
-                "on",
-            ])],
+            Task::EnableFullMemoryDumps => vec![(
+                "powershell",
+                vec![
+                    "-command",
+                    "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl' -Name 'CrashDumpEnabled' -Value 1",
+                ],
+            )],
+            Task::HardenSystem => vec![(
+                "netsh",
+                vec!["advfirewall", "set", "allprofiles", "state", "on"],
+            )],
             Task::FlushDNSCache => vec![("cmd", vec!["/c", "ipconfig /flushdns"])],
             Task::ClearEventLogs => vec![
                 ("wevtutil", vec!["cl", "Application"]),
@@ -198,39 +232,65 @@ impl Task {
             ],
             Task::SearchIndexingCleanup => vec![
                 ("powershell", vec!["-command", "Stop-Service WSearch"]),
-                ("powershell", vec![
-                    "-command",
-                    "Remove-Item -Path 'C:\\ProgramData\\Microsoft\\Search\\Data' -Recurse -Force -ErrorAction SilentlyContinue",
-                ]),
+                (
+                    "powershell",
+                    vec![
+                        "-command",
+                        "Remove-Item -Path 'C:\\ProgramData\\Microsoft\\Search\\Data' -Recurse -Force -ErrorAction SilentlyContinue",
+                    ],
+                ),
                 ("powershell", vec!["-command", "Start-Service WSearch"]),
             ],
             Task::BrowserCacheCleanup => vec![
-                ("cmd", vec![
-                    "/c",
-                    "for /d %i in (\"%localappdata%\\Google\\Chrome\\User Data\\Default\\Cache\\*\") do @rd /s /q \"%i\"",
-                ]),
-                ("cmd", vec![
-                    "/c",
-                    "for /d %i in (\"%localappdata%\\Microsoft\\Edge\\User Data\\Default\\Cache\\*\") do @rd /s /q \"%i\"",
-                ]),
-                ("cmd", vec![
-                    "/c",
-                    "for /d %i in (\"%localappdata%\\Mozilla\\Firefox\\Profiles\\*\\cache2\\*\") do @rd /s /q \"%i\"",
-                ]),
+                (
+                    "cmd",
+                    vec![
+                        "/c",
+                        "for /d %i in (\"%localappdata%\\Google\\Chrome\\User Data\\Default\\Cache\\*\") do @rd /s /q \"%i\"",
+                    ],
+                ),
+                (
+                    "cmd",
+                    vec![
+                        "/c",
+                        "for /d %i in (\"%localappdata%\\Microsoft\\Edge\\User Data\\Default\\Cache\\*\") do @rd /s /q \"%i\"",
+                    ],
+                ),
+                (
+                    "cmd",
+                    vec![
+                        "/c",
+                        "for /d %i in (\"%localappdata%\\Mozilla\\Firefox\\Profiles\\*\\cache2\\*\") do @rd /s /q \"%i\"",
+                    ],
+                ),
             ],
-            
+            Task::HardwareBenchmark => vec![(
+                "cmd",
+                vec!["/c", "winsat formal > HardwareBenchmarkReport.txt"],
+            )],
+            Task::PowerEfficiencyReport => vec![
+    (
+        "cmd",
+        vec![
+            "/c",
+            "cd /d %CD% && powercfg /energy /output \"energy_report.html\" /duration 60"
+        ],
+    ),
+],
+
         };
 
         thread::spawn(move || {
             // Mark this task as running by storing its index.
             *running_task.lock().unwrap() = Some(task_index);
-    
+
             for (program, args) in commands {
                 let result = exec_command(program, &args, log.clone());
                 let mut log_lock = log.lock().unwrap();
                 match result {
                     Ok(output) => {
-                        log_lock.push_str(&format!("Command '{}' executed successfully.\n", program));
+                        log_lock
+                            .push_str(&format!("Command '{}' executed successfully.\n", program));
                         log_lock.push_str(&format!("Output:\n{}\n", output));
                     }
                     Err(e) => {
@@ -238,20 +298,14 @@ impl Task {
                     }
                 }
             }
-    
+
             // Reset the running task flag to indicate that no task is active.
             *running_task.lock().unwrap() = None;
         })
     }
 }
 
-
-
-fn exec_command(
-    program: &str,
-    args: &[&str],
-    log: Arc<Mutex<String>>,
-) -> Result<String, String> {
+fn exec_command(program: &str, args: &[&str], log: Arc<Mutex<String>>) -> Result<String, String> {
     {
         let mut log_guard = log.lock().unwrap();
         log_guard.push_str(&format!(
@@ -323,10 +377,15 @@ fn exec_command(
     }
 
     // Ensure the child process has finished.
-    let exit_status = child.wait().map_err(|e| format!("Failed to wait for command: {}", e))?;
+    let exit_status = child
+        .wait()
+        .map_err(|e| format!("Failed to wait for command: {}", e))?;
     if !exit_status.success() {
         let code = exit_status.code().unwrap_or(-1);
-        let err_msg = format!("Command '{}' failed with code {}: {}", program, code, error_collector);
+        let err_msg = format!(
+            "Command '{}' failed with code {}: {}",
+            program, code, error_collector
+        );
         {
             let mut log_guard = log.lock().unwrap();
             log_guard.push_str(&err_msg);
@@ -337,11 +396,11 @@ fn exec_command(
     Ok(output_collector)
 }
 
-pub struct SystemMaintenanceApp {
-    tasks: Vec<Task>,
+struct SystemMaintenanceApp {
+    tasks: Vec<Task>, // Your task collection
     log: Arc<Mutex<String>>,
-    // Change the running flag to an Option that holds the index of the running task.
     running_task: Arc<Mutex<Option<usize>>>,
+    current_section: AppSection,
 }
 
 impl SystemMaintenanceApp {
@@ -367,61 +426,109 @@ impl SystemMaintenanceApp {
                 Task::RestartPrintSpooler,
                 Task::CheckWMIIntegrity,
                 Task::SalvageWMI,
-                
+                Task::HardwareBenchmark,
+                Task::PowerEfficiencyReport,
             ],
             log: Arc::new(Mutex::new(String::new())),
             // Initially, no task is running.
             running_task: Arc::new(Mutex::new(None)),
+            current_section: AppSection::Repairs,
         }
     }
 }
 
 impl eframe::App for SystemMaintenanceApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Create a top panel with selectable tabs.
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui.selectable_label(self.current_section == AppSection::Repairs, "Repairs").clicked() {
+                    self.current_section = AppSection::Repairs;
+                }
+                if ui.selectable_label(self.current_section == AppSection::Reports, "Reports").clicked() {
+                    self.current_section = AppSection::Reports;
+                }
+                if ui.selectable_label(self.current_section == AppSection::Configuration, "Configuration").clicked() {
+                    self.current_section = AppSection::Configuration;
+                }
+                if ui.selectable_label(self.current_section == AppSection::Logs, "Logs").clicked() {
+                    self.current_section = AppSection::Logs;
+                }
+            });
+        });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("System Maintenance");
-            
+
             // Lock once to get the current running task (if any).
             let current_running = *self.running_task.lock().unwrap();
-            
-            // Enumerate tasks so we know the index.
-            for (idx, task) in self.tasks.iter().enumerate() {
-                // If the current running task matches this index, show a label.
-                if current_running == Some(idx) {
-                    ui.label(format!("Running: {}", task.task_description()));
-                } else if ui.button(task.task_description()).clicked() {
-                    // When starting a task, record its index.
-                    *self.running_task.lock().unwrap() = Some(idx);
-                    // Here you call the task execution and pass the shared log and running_task.
-                    // You should ensure that inside execute_commands, once the task completes,
-                    // the running_task is reset to None.
-                    task.execute_commands(idx, self.log.clone(), self.running_task.clone());
 
+            match self.current_section {
+                AppSection::Repairs => {
+                    // Filter tasks: those with a description starting with "Repair:"
+                    for (idx, task) in self.tasks.iter().enumerate() {
+                        let desc = task.task_description();
+                        if desc.starts_with("Repair:") {
+                            if current_running == Some(idx) {
+                                ui.label(format!("Running: {}", desc));
+                            } else if ui.button(desc).clicked() {
+                                *self.running_task.lock().unwrap() = Some(idx);
+                                task.execute_commands(idx, self.log.clone(), self.running_task.clone());
+                            }
+                        }
+                    }
+                }
+                AppSection::Reports => {
+                    // Filter tasks: those with descriptions starting with "Report:"
+                    for (idx, task) in self.tasks.iter().enumerate() {
+                        let desc = task.task_description();
+                        if desc.starts_with("Report:") {
+                            if current_running == Some(idx) {
+                                ui.label(format!("Running: {}", desc));
+                            } else if ui.button(desc).clicked() {
+                                *self.running_task.lock().unwrap() = Some(idx);
+                                task.execute_commands(idx, self.log.clone(), self.running_task.clone());
+                            }
+                        }
+                    }
+                }
+                AppSection::Configuration => {
+                    // Filter tasks: those with descriptions starting with "Configuration:"
+                    for (idx, task) in self.tasks.iter().enumerate() {
+                        let desc = task.task_description();
+                        if desc.starts_with("Configuration:") {
+                            if current_running == Some(idx) {
+                                ui.label(format!("Running: {}", desc));
+                            } else if ui.button(desc).clicked() {
+                                *self.running_task.lock().unwrap() = Some(idx);
+                                task.execute_commands(idx, self.log.clone(), self.running_task.clone());
+                            }
+                        }
+                    }
+                }
+                AppSection::Logs => {
+                    // For logs, just display the log output.
+                    ui.heading("Logs");
+                    egui::ScrollArea::vertical()
+                        .max_height(200.0)
+                        .show(ui, |ui| {
+                            ui.label(&*self.log.lock().unwrap());
+                        });
                 }
             }
-            
-            ui.separator();
-            
-            if current_running.is_some() {
+
+            // If a task is running and we're not in the Logs tab, add a progress indicator.
+            if self.current_section != AppSection::Logs && current_running.is_some() {
+                ui.separator();
                 ui.label("A task is currently running...");
-                // You might consider tracking progress specifically per task.
                 ui.add(egui::ProgressBar::new(0.5).animate(true));
             }
-            
-            ui.separator();
-            
-            // Display the log.
-            ui.label("Logs:");
-            egui::ScrollArea::vertical()
-                .max_height(200.0)
-                .show(ui, |ui| {
-                    ui.label(&*self.log.lock().unwrap());
-                });
-            
+
             ctx.request_repaint();
         });
     }
 }
+
 
 fn main() -> eframe::Result<()> {
     let app = SystemMaintenanceApp::new();

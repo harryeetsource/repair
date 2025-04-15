@@ -25,6 +25,7 @@ pub enum Task {
     RestartPrintSpooler,
     CheckWMIIntegrity,
     SalvageWMI,
+
 }
 
 impl Task {
@@ -217,6 +218,7 @@ impl Task {
                     "for /d %i in (\"%localappdata%\\Mozilla\\Firefox\\Profiles\\*\\cache2\\*\") do @rd /s /q \"%i\"",
                 ]),
             ],
+            
         };
 
         thread::spawn(move || {
@@ -365,6 +367,7 @@ impl SystemMaintenanceApp {
                 Task::RestartPrintSpooler,
                 Task::CheckWMIIntegrity,
                 Task::SalvageWMI,
+                
             ],
             log: Arc::new(Mutex::new(String::new())),
             // Initially, no task is running.

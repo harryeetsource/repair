@@ -2,7 +2,7 @@ use eframe::egui;
 use std::process::{Command as SystemCommandProcess, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
-
+use std::io::{BufRead, BufReader};
 #[derive(Debug, Clone)]
 pub enum Task {
     DiskCleanup,
@@ -55,8 +55,9 @@ impl Task {
 
     pub fn execute_commands(
         &self,
+        task_index: usize, // Added a task index to identify which task is running.
         log: Arc<Mutex<String>>,
-        running_flag: Arc<Mutex<bool>>,
+        running_task: Arc<Mutex<Option<usize>>>,
     ) -> thread::JoinHandle<()> {
         let commands = match self {
             Task::DiskCleanup => vec![
@@ -219,27 +220,36 @@ impl Task {
         };
 
         thread::spawn(move || {
-            *running_flag.lock().unwrap() = true;
-
+            // Mark this task as running by storing its index.
+            *running_task.lock().unwrap() = Some(task_index);
+    
             for (program, args) in commands {
                 let result = exec_command(program, &args, log.clone());
-                let mut log = log.lock().unwrap();
+                let mut log_lock = log.lock().unwrap();
                 match result {
                     Ok(output) => {
-                        log.push_str(&format!("Command '{}' executed successfully.\n", program));
-                        log.push_str(&format!("Output:\n{}\n", output));
+                        log_lock.push_str(&format!("Command '{}' executed successfully.\n", program));
+                        log_lock.push_str(&format!("Output:\n{}\n", output));
                     }
-                    Err(e) => log.push_str(&format!("Command '{}' failed: {}\n", program, e)),
+                    Err(e) => {
+                        log_lock.push_str(&format!("Command '{}' failed: {}\n", program, e));
+                    }
                 }
             }
-
-            *running_flag.lock().unwrap() = false;
+    
+            // Reset the running task flag to indicate that no task is active.
+            *running_task.lock().unwrap() = None;
         })
     }
 }
 
-fn exec_command(program: &str, args: &[&str], log: Arc<Mutex<String>>) -> Result<String, String> {
-    // Log the command being executed in the scrollable log
+
+
+fn exec_command(
+    program: &str,
+    args: &[&str],
+    log: Arc<Mutex<String>>,
+) -> Result<String, String> {
     {
         let mut log_guard = log.lock().unwrap();
         log_guard.push_str(&format!(
@@ -249,31 +259,87 @@ fn exec_command(program: &str, args: &[&str], log: Arc<Mutex<String>>) -> Result
         ));
     }
 
-    let output = SystemCommandProcess::new(program)
+    let mut child = SystemCommandProcess::new(program)
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .and_then(|child| child.wait_with_output())
         .map_err(|e| format!("Failed to start '{}': {}", program, e))?;
 
-    if !output.status.success() {
-        let code = output.status.code().unwrap_or(-1);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "Command '{}' failed with error code {}: {}",
-            program, code, stderr
-        ));
+    // Take ownership of stdout and stderr.
+    let stdout_pipe = child.stdout.take().expect("Failed to capture stdout");
+    let stderr_pipe = child.stderr.take().expect("Failed to capture stderr");
+
+    let stdout_reader = BufReader::new(stdout_pipe);
+    let stderr_reader = BufReader::new(stderr_pipe);
+    let mut output_collector = String::new();
+
+    // Read stdout line-by-line.
+    for line in stdout_reader.lines() {
+        match line {
+            Ok(line_content) => {
+                {
+                    let mut log_guard = log.lock().unwrap();
+                    log_guard.push_str(&format!("stdout: {}\n", line_content));
+                }
+                output_collector.push_str(&line_content);
+                output_collector.push('\n');
+            }
+            Err(e) => {
+                let err = format!("Error reading stdout: {}", e);
+                {
+                    let mut log_guard = log.lock().unwrap();
+                    log_guard.push_str(&err);
+                }
+                return Err(err);
+            }
+        }
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(stdout)
+    // Read stderr line-by-line.
+    let mut error_collector = String::new();
+    for line in stderr_reader.lines() {
+        match line {
+            Ok(line_content) => {
+                let error_msg = format!("stderr: {}\n", line_content);
+                {
+                    let mut log_guard = log.lock().unwrap();
+                    log_guard.push_str(&error_msg);
+                }
+                error_collector.push_str(&line_content);
+                error_collector.push('\n');
+            }
+            Err(e) => {
+                let err = format!("Error reading stderr: {}", e);
+                {
+                    let mut log_guard = log.lock().unwrap();
+                    log_guard.push_str(&err);
+                }
+                return Err(err);
+            }
+        }
+    }
+
+    // Ensure the child process has finished.
+    let exit_status = child.wait().map_err(|e| format!("Failed to wait for command: {}", e))?;
+    if !exit_status.success() {
+        let code = exit_status.code().unwrap_or(-1);
+        let err_msg = format!("Command '{}' failed with code {}: {}", program, code, error_collector);
+        {
+            let mut log_guard = log.lock().unwrap();
+            log_guard.push_str(&err_msg);
+        }
+        return Err(err_msg);
+    }
+
+    Ok(output_collector)
 }
 
 pub struct SystemMaintenanceApp {
     tasks: Vec<Task>,
     log: Arc<Mutex<String>>,
-    running_task: Arc<Mutex<bool>>,
+    // Change the running flag to an Option that holds the index of the running task.
+    running_task: Arc<Mutex<Option<usize>>>,
 }
 
 impl SystemMaintenanceApp {
@@ -301,7 +367,8 @@ impl SystemMaintenanceApp {
                 Task::SalvageWMI,
             ],
             log: Arc::new(Mutex::new(String::new())),
-            running_task: Arc::new(Mutex::new(false)),
+            // Initially, no task is running.
+            running_task: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -310,32 +377,44 @@ impl eframe::App for SystemMaintenanceApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("System Maintenance");
-
-            for task in &self.tasks {
-                if *self.running_task.lock().unwrap() {
+            
+            // Lock once to get the current running task (if any).
+            let current_running = *self.running_task.lock().unwrap();
+            
+            // Enumerate tasks so we know the index.
+            for (idx, task) in self.tasks.iter().enumerate() {
+                // If the current running task matches this index, show a label.
+                if current_running == Some(idx) {
                     ui.label(format!("Running: {}", task.task_description()));
                 } else if ui.button(task.task_description()).clicked() {
-                    task.execute_commands(self.log.clone(), self.running_task.clone());
+                    // When starting a task, record its index.
+                    *self.running_task.lock().unwrap() = Some(idx);
+                    // Here you call the task execution and pass the shared log and running_task.
+                    // You should ensure that inside execute_commands, once the task completes,
+                    // the running_task is reset to None.
+                    task.execute_commands(idx, self.log.clone(), self.running_task.clone());
+
                 }
             }
-
+            
             ui.separator();
-
-            if *self.running_task.lock().unwrap() {
-                ui.label("Task is currently running...");
+            
+            if current_running.is_some() {
+                ui.label("A task is currently running...");
+                // You might consider tracking progress specifically per task.
                 ui.add(egui::ProgressBar::new(0.5).animate(true));
             }
-
+            
             ui.separator();
-
-            // Logs
+            
+            // Display the log.
             ui.label("Logs:");
             egui::ScrollArea::vertical()
                 .max_height(200.0)
                 .show(ui, |ui| {
                     ui.label(&*self.log.lock().unwrap());
                 });
-
+            
             ctx.request_repaint();
         });
     }

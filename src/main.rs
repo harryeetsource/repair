@@ -4,6 +4,7 @@ use std::process::{Command as SystemCommandProcess, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::env;
+use std::fs;
 #[derive(Debug, Clone)]
 pub enum Task {
     DiskCleanup,
@@ -513,6 +514,28 @@ impl eframe::App for SystemMaintenanceApp {
                 }
                 AppSection::Logs => {
                     ui.heading("Logs");
+                    
+                    // Add a button to save the logs to a file
+                    if ui.button("Save Logs to File").clicked() {
+                        // Acquire a lock and clone the contents of the logs.
+                        let logs = self.log.lock().unwrap().clone();
+                        
+                        // Attempt to write the logs to 'output_logs.txt'
+                        match fs::write("output_logs.txt", logs) {
+                            Ok(_) => {
+                                // You can show a message in the console or update the UI (if desired)
+                                println!("Logs have been successfully saved to output_logs.txt.");
+                                // Alternatively, you may use a UI feedback mechanism, for example:
+                                ui.label("Logs saved successfully!");
+                            },
+                            Err(e) => {
+                                // Log the error or show an error message in your UI
+                                println!("Error saving logs: {}", e);
+                                ui.label(format!("Error saving logs: {}", e));
+                            },
+                        }
+                    }
+                    
                     // Allocate a UI block with a minimum size of 600x300 pixels.
                     ui.allocate_ui(egui::Vec2::new(600.0, 300.0), |ui| {
                         // Use a scroll area that permits both vertical and horizontal scrolling.

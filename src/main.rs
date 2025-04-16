@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader};
 use std::process::{Command as SystemCommandProcess, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::env;
 #[derive(Debug, Clone)]
 pub enum Task {
     DiskCleanup,
@@ -71,6 +72,7 @@ impl Task {
         log: Arc<Mutex<String>>,
         running_task: Arc<Mutex<Option<usize>>>,
     ) -> thread::JoinHandle<()> {
+
         let commands = match self {
             Task::DiskCleanup => vec![
                 ("cleanmgr", vec!["/sagerun:1"]),
@@ -268,15 +270,17 @@ impl Task {
                 "cmd",
                 vec!["/c", "winsat formal > HardwareBenchmarkReport.txt"],
             )],
-            Task::PowerEfficiencyReport => vec![
-    (
-        "cmd",
-        vec![
-            "/c",
-            "cd /d %CD% && powercfg /energy /output \"energy_report.html\" /duration 60"
-        ],
-    ),
-],
+            Task::PowerEfficiencyReport => {
+    // Instead of embedding a cd command, we let the exec_command set the working directory.
+    vec![
+        (
+            "powercfg",
+            vec!["/energy", "/output", "energy_report.html", "/duration", "60"],
+        ),
+    ]
+}
+
+
 
         };
 
@@ -314,9 +318,10 @@ fn exec_command(program: &str, args: &[&str], log: Arc<Mutex<String>>) -> Result
             args.join(" ")
         ));
     }
-
+    let cwd = env::current_dir().expect("Failed to get current directory");
     let mut child = SystemCommandProcess::new(program)
         .args(args)
+        .current_dir(cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -507,14 +512,17 @@ impl eframe::App for SystemMaintenanceApp {
                     }
                 }
                 AppSection::Logs => {
-                    // For logs, just display the log output.
                     ui.heading("Logs");
-                    egui::ScrollArea::vertical()
-                        .max_height(200.0)
-                        .show(ui, |ui| {
+                    // Allocate a UI block with a minimum size of 600x300 pixels.
+                    ui.allocate_ui(egui::Vec2::new(600.0, 300.0), |ui| {
+                        // Use a scroll area that permits both vertical and horizontal scrolling.
+                        egui::ScrollArea::both().show(ui, |ui| {
                             ui.label(&*self.log.lock().unwrap());
                         });
+                    });
                 }
+                
+                
             }
 
             // If a task is running and we're not in the Logs tab, add a progress indicator.

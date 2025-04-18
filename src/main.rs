@@ -5,6 +5,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::env;
 use std::fs;
+use std::ffi::c_void;
+use std::ptr::null_mut;
+use windows::Win32::Foundation::NTSTATUS;
+
 #[derive(Debug, Clone)]
 pub enum Task {
     DiskCleanup,
@@ -29,12 +33,14 @@ pub enum Task {
     SalvageWMI,
     HardwareBenchmark,
     PowerEfficiencyReport,
+    TriggerBSOD,
 }
 #[derive(PartialEq)]
 enum AppSection {
     Repairs,
     Reports,
     Configuration,
+    Crash,
     Logs,
 }
 
@@ -64,6 +70,7 @@ impl Task {
             Task::SalvageWMI => "Repair: Salvage WMI repository",
             Task::HardwareBenchmark => "Report: Generate system benchmark report",
             Task::PowerEfficiencyReport => "Report: Generate power efficiency report",
+            Task::TriggerBSOD => "Crash: Trigger Blue Screen of Death",
         }
     }
 
@@ -281,6 +288,65 @@ impl Task {
     ]
 }
 
+Task::TriggerBSOD => {
+    // Call the unsafe crash logic in a blocking thread
+    let result = exec_command("Triggering BSOD via NtRaiseHardError", &[], log.clone());
+    {
+        let mut log_lock = log.lock().unwrap();
+        log_lock.push_str("Executing BSOD trigger via NtRaiseHardError...\n");
+        match result {
+            Ok(_) => log_lock.push_str("Attempted BSOD execution.\n"),
+            Err(e) => log_lock.push_str(&format!("BSOD trigger failed: {}\n", e)),
+        }
+    }
+
+    // NOTE: The actual crash is handled outside the exec_command logic
+    // to prevent process-level cleanup interfering with crash state
+    unsafe {
+        let bsod_thread = thread::spawn(move || {
+
+            #[link(name = "ntdll")]
+            unsafe extern "system" {
+                unsafe fn NtRaiseHardError(
+                    ErrorStatus: NTSTATUS,
+                    NumberOfParameters: u32,
+                    UnicodeStringParameterMask: u32,
+                    Parameters: *mut c_void,
+                    ValidResponseOption: u32,
+                    Response: *mut u32,
+                ) -> NTSTATUS;
+
+                unsafe fn RtlAdjustPrivilege(
+                    Privilege: u32,
+                    Enable: bool,
+                    CurrentThread: bool,
+                    Enabled: *mut bool,
+                ) -> NTSTATUS;
+            }
+
+            const SE_SHUTDOWN_PRIVILEGE: u32 = 19;
+            const STATUS_ASSERTION_FAILURE: i32 = 0xC0000420u32 as i32;
+
+            let mut enabled = false;
+            let _ = RtlAdjustPrivilege(SE_SHUTDOWN_PRIVILEGE, true, false, &mut enabled);
+            let mut response: u32 = 0;
+
+            let _ = NtRaiseHardError(
+                NTSTATUS(STATUS_ASSERTION_FAILURE),
+                0,
+                0,
+                null_mut(),
+                6,
+                &mut response,
+            );
+        });
+
+        bsod_thread.join().ok();
+    }
+
+    vec![]
+}
+
 
 
         };
@@ -407,6 +473,7 @@ struct SystemMaintenanceApp {
     log: Arc<Mutex<String>>,
     running_task: Arc<Mutex<Option<usize>>>,
     current_section: AppSection,
+    pub show_bsod_confirm: bool,
 }
 
 impl SystemMaintenanceApp {
@@ -434,11 +501,13 @@ impl SystemMaintenanceApp {
                 Task::SalvageWMI,
                 Task::HardwareBenchmark,
                 Task::PowerEfficiencyReport,
+                Task::TriggerBSOD,
             ],
             log: Arc::new(Mutex::new(String::new())),
             // Initially, no task is running.
             running_task: Arc::new(Mutex::new(None)),
             current_section: AppSection::Repairs,
+            show_bsod_confirm: false,
         }
     }
 }
@@ -456,6 +525,9 @@ impl eframe::App for SystemMaintenanceApp {
                 }
                 if ui.selectable_label(self.current_section == AppSection::Configuration, "Configuration").clicked() {
                     self.current_section = AppSection::Configuration;
+                }
+                if ui.selectable_label(self.current_section == AppSection::Crash, "Crash").clicked() {
+                    self.current_section = AppSection::Crash;
                 }
                 if ui.selectable_label(self.current_section == AppSection::Logs, "Logs").clicked() {
                     self.current_section = AppSection::Logs;
@@ -512,6 +584,49 @@ impl eframe::App for SystemMaintenanceApp {
                         }
                     }
                 }
+                AppSection::Crash => {
+                    for (idx, task) in self.tasks.iter().enumerate() {
+                        let desc = task.task_description();
+                        if desc.starts_with("Crash:") {
+                            if current_running == Some(idx) {
+                                ui.label(format!("Running: {}", desc));
+                            } else if ui.button(desc).clicked() {
+                                // Show confirmation modal *instead* of executing immediately
+                                self.show_bsod_confirm = true;
+                            }
+                        }
+                    }
+                
+                    // Show confirmation window (centered popup)
+                    if self.show_bsod_confirm {
+                        egui::Window::new("⚠️ Confirm System Crash")
+                            .collapsible(false)
+                            .resizable(false)
+                            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+                            .show(ctx, |ui| {
+                                ui.label("⚠️ This action will forcefully crash your system to generate a memory dump.");
+                                ui.label("Do you want to continue?");
+                
+                                ui.horizontal(|ui| {
+                                    if ui.button("Yes, Crash the System").clicked() {
+                                        self.show_bsod_confirm = false;
+                
+                                        // Execute the BSOD task (doesn't need a real index)
+                                        Task::TriggerBSOD.execute_commands(
+                                            usize::MAX,
+                                            self.log.clone(),
+                                            self.running_task.clone(),
+                                        );
+                                    }
+                
+                                    if ui.button("Cancel").clicked() {
+                                        self.show_bsod_confirm = false;
+                                    }
+                                });
+                            });
+                    }
+                }
+                
                 AppSection::Logs => {
                     ui.heading("Logs");
                     
